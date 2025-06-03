@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Sessions</title>
+</head>
+<body>
+    <h1>Clear All Sessions</h1>
+    <button onclick="clearSessions()">Clear Sessions and Reload</button>
+    
+    <script>
+        function clearSessions() {
+            localStorage.removeItem('adminSession');
+            localStorage.removeItem('userSession');
+            alert('Sessions cleared! Redirecting to home page...');
+            window.location.href = 'http://localhost:3000';
+        }
+        
+        // Auto-clear on page load
+        clearSessions();
+    </script>
+</body>
+</html>
