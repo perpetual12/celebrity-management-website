@@ -52,7 +52,8 @@ function App() {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
+        // Only clear session on 401 if it's not a login attempt
+        if (error.response?.status === 401 && !error.config?.url?.includes('/login')) {
           console.log('Authentication error detected, clearing user session');
           setUser(null);
           localStorage.removeItem('adminSession');

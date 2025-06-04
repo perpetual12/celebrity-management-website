@@ -23,11 +23,18 @@ const Login = ({ setUser }) => {
     setLoading(true);
     setError('');
 
-    console.log('🔐 Login attempt:', { username: formData.username });
+    console.log('🔐 Login attempt:', {
+      username: formData.username,
+      apiUrl: process.env.REACT_APP_API_URL || 'relative URL',
+      fullUrl: axios.defaults.baseURL ? `${axios.defaults.baseURL}/api/users/login` : '/api/users/login'
+    });
 
     try {
       const res = await axios.post('/api/users/login', formData, {
-        withCredentials: true
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
 
       console.log('✅ Login successful:', res.data);
@@ -128,6 +135,15 @@ const Login = ({ setUser }) => {
           <p className="text-sm text-gray-600">
             Don't have an account? <Link to="/register" className="text-indigo-600 hover:underline">Register</Link>
           </p>
+        </div>
+
+        {/* Test Credentials Helper */}
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-sm font-semibold text-blue-800 mb-2">🧪 Test Credentials</h3>
+          <div className="text-xs text-blue-700 space-y-1">
+            <p><strong>Test User:</strong> testuser / test123</p>
+            <p><strong>Admin:</strong> admin / admin123</p>
+          </div>
         </div>
       </form>
     </div>
