@@ -16,19 +16,31 @@ import client from './config/database.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
+
+// CORS configuration for production
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000', 'https://localhost:3000'];
 
 // Middleware
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'celebrity-connect-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // Set to true in production with HTTPS
+    secure: process.env.NODE_ENV === 'production', // HTTPS in production
     httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days for persistent sessions
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days for persistent sessions
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   }
 }));
 app.use(passport.initialize());
@@ -43,7 +55,8 @@ app.get('/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     message: 'Celebrity Connect Backend is running!',
-    port: PORT
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
