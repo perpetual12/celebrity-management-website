@@ -172,6 +172,25 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// Check session status
+router.get('/session', (req, res) => {
+  res.json({
+    session_exists: !!req.session,
+    session_id: req.sessionID,
+    user_authenticated: !!req.user,
+    user_info: req.user ? {
+      username: req.user.username,
+      role: req.user.role,
+      id: req.user.id
+    } : null,
+    session_data: req.session ? {
+      cookie: req.session.cookie,
+      passport: req.session.passport
+    } : null,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Test login functionality
 router.post('/test-login', async (req, res) => {
   try {

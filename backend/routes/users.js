@@ -90,10 +90,13 @@ router.post('/login', (req, res, next) => {
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
       console.log('✅ Login successful for user:', user.username);
+      console.log('✅ Session ID:', req.sessionID);
+      console.log('✅ Session created:', !!req.session);
 
       res.json({
         user: userWithoutPassword,
-        message: 'Login successful'
+        message: 'Login successful',
+        sessionId: req.sessionID
       });
     });
   })(req, res, next);

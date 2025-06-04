@@ -73,6 +73,30 @@ function App() {
     const checkAuthStatus = async () => {
       try {
         console.log('🔍 Checking authentication status...');
+
+        // First check localStorage for existing session
+        const storedAdminSession = localStorage.getItem('adminSession');
+        const storedUserSession = localStorage.getItem('userSession');
+        const storedSession = storedAdminSession || storedUserSession;
+
+        if (storedSession) {
+          try {
+            const sessionData = JSON.parse(storedSession);
+            const isRecent = Date.now() - sessionData.timestamp < 30 * 24 * 60 * 60 * 1000; // 30 days
+
+            if (isRecent && sessionData.user) {
+              console.log(`🔄 Found valid stored ${sessionData.user.role} session for ${sessionData.user.username}`);
+              // Set user immediately from localStorage to prevent redirect
+              setUser(sessionData.user);
+            }
+          } catch (parseErr) {
+            console.log('❌ Invalid stored session data, clearing');
+            localStorage.removeItem('adminSession');
+            localStorage.removeItem('userSession');
+          }
+        }
+
+        // Then try to verify with server
         const res = await axios.get('/api/users/me', {
           withCredentials: true
         });
@@ -80,7 +104,7 @@ function App() {
         console.log('✅ User authenticated via server session:', userData.username);
         setUser(userData);
 
-        // Store user session in localStorage for persistence
+        // Update localStorage with fresh data
         const sessionKey = userData.role === 'admin' ? 'adminSession' : 'userSession';
         localStorage.setItem(sessionKey, JSON.stringify({
           user: userData,
