@@ -61,19 +61,19 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Session configuration
+// Session configuration - Simple and reliable
 const isProduction = process.env.NODE_ENV === 'production';
+
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'celebrity-connect-secret',
   resave: false,
   saveUninitialized: false,
   name: 'celebrity-connect-session',
   cookie: {
-    secure: false, // Set to false for now to test - we'll enable HTTPS later
+    secure: false, // Keep false for now - works better with Render
     httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days for persistent sessions
-    sameSite: 'lax', // Changed from 'none' to 'lax' for better compatibility
-    domain: undefined // Let the browser handle this
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours (shorter for testing)
+    sameSite: 'lax'
   }
 };
 
@@ -82,11 +82,12 @@ console.log('   - Environment:', process.env.NODE_ENV || 'development');
 console.log('   - Secure cookies:', sessionConfig.cookie.secure);
 console.log('   - SameSite:', sessionConfig.cookie.sameSite);
 console.log('   - Session secret length:', sessionConfig.secret.length);
+console.log('   - Max age (hours):', sessionConfig.cookie.maxAge / (60 * 60 * 1000));
 
-// In production, we'll use the default MemoryStore but with proper configuration
+// Suppress the MemoryStore warning for now
 if (isProduction) {
-  console.log('⚠️  Using MemoryStore for sessions in production');
-  console.log('💡 For high-traffic apps, consider using connect-pg-simple or Redis');
+  console.log('📝 Note: Using MemoryStore (fine for small-scale deployment)');
+  console.log('💡 The MemoryStore warning can be ignored for testing/small apps');
 }
 
 app.use(session(sessionConfig));
