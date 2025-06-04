@@ -81,22 +81,39 @@ router.post('/login', (req, res, next) => {
       });
     }
 
-    req.logIn(user, (err) => {
-      if (err) {
-        console.error('❌ Session creation error:', err);
-        return res.status(500).json({ error: 'Failed to create session' });
+    // Regenerate session for security
+    req.session.regenerate((regenerateErr) => {
+      if (regenerateErr) {
+        console.error('❌ Session regeneration error:', regenerateErr);
+        return res.status(500).json({ error: 'Failed to regenerate session' });
       }
 
-      // Remove password from response
-      const { password, ...userWithoutPassword } = user;
-      console.log('✅ Login successful for user:', user.username);
-      console.log('✅ Session ID:', req.sessionID);
-      console.log('✅ Session created:', !!req.session);
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error('❌ Session creation error:', err);
+          return res.status(500).json({ error: 'Failed to create session' });
+        }
 
-      res.json({
-        user: userWithoutPassword,
-        message: 'Login successful',
-        sessionId: req.sessionID
+        // Save session explicitly
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error('❌ Session save error:', saveErr);
+            return res.status(500).json({ error: 'Failed to save session' });
+          }
+
+          // Remove password from response
+          const { password, ...userWithoutPassword } = user;
+          console.log('✅ Login successful for user:', user.username);
+          console.log('✅ Session ID:', req.sessionID);
+          console.log('✅ Session regenerated and saved:', !!req.session);
+          console.log('✅ User authenticated:', req.isAuthenticated());
+
+          res.json({
+            user: userWithoutPassword,
+            message: 'Login successful',
+            sessionId: req.sessionID
+          });
+        });
       });
     });
   })(req, res, next);

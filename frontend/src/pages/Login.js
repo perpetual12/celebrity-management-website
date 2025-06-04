@@ -52,21 +52,10 @@ const Login = ({ setUser }) => {
 
       console.log('✅ User session stored:', sessionKey);
       console.log('✅ User state set:', userData.username);
+      console.log('🎯 Navigating to dashboard...');
 
-      // Verify the session was created by checking /me endpoint
-      try {
-        const verifyRes = await axios.get('/api/users/me', {
-          withCredentials: true
-        });
-        console.log('✅ Session verified:', verifyRes.data.username);
-
-        // Navigate to dashboard after verification
-        console.log('🎯 Navigating to dashboard...');
-        navigate('/dashboard');
-      } catch (verifyErr) {
-        console.error('❌ Session verification failed:', verifyErr);
-        setError('Login succeeded but session verification failed. Please try again.');
-      }
+      // Navigate immediately without verification (verification will happen in App.js)
+      navigate('/dashboard');
     } catch (err) {
       console.error('❌ Login error:', err);
       console.error('❌ Error response:', err.response?.data);

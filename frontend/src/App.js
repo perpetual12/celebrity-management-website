@@ -111,7 +111,28 @@ function App() {
           timestamp: Date.now()
         }));
       } catch (err) {
-        console.log('❌ Not authenticated via server session:', err.response?.status);
+        console.log('❌ Server session check failed:', err.response?.status);
+
+        // If we have a valid localStorage session but server check fails,
+        // keep the user logged in (they might have just logged in)
+        const storedAdminSession = localStorage.getItem('adminSession');
+        const storedUserSession = localStorage.getItem('userSession');
+        const storedSession = storedAdminSession || storedUserSession;
+
+        if (storedSession) {
+          try {
+            const sessionData = JSON.parse(storedSession);
+            const isRecent = Date.now() - sessionData.timestamp < 5 * 60 * 1000; // 5 minutes
+
+            if (isRecent && sessionData.user) {
+              console.log('🔄 Using recent localStorage session while server session establishes');
+              setUser(sessionData.user);
+              return; // Don't clear the session yet
+            }
+          } catch (parseErr) {
+            console.log('❌ Invalid stored session data');
+          }
+        }
 
         // Check for stored sessions (admin or regular user)
         const storedAdminSession = localStorage.getItem('adminSession');
@@ -176,7 +197,10 @@ function App() {
 
     if (!publicPaths.some(path => currentPath.startsWith(path))) {
       console.log('🔍 Checking auth status for protected route:', currentPath);
-      checkAuthStatus();
+      // Add a small delay to allow session to be established
+      setTimeout(() => {
+        checkAuthStatus();
+      }, 100);
     } else {
       console.log('📍 On public page, skipping auth check:', currentPath);
       setLoading(false);
