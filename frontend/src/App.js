@@ -134,58 +134,11 @@ function App() {
           }
         }
 
-        // Check for stored sessions (admin or regular user)
-        const storedAdminSession = localStorage.getItem('adminSession');
-        const storedUserSession = localStorage.getItem('userSession');
-        const storedSession = storedAdminSession || storedUserSession;
-
-        if (storedSession) {
-          try {
-            const sessionData = JSON.parse(storedSession);
-            const isRecent = Date.now() - sessionData.timestamp < 30 * 24 * 60 * 60 * 1000; // 30 days
-
-            if (isRecent && sessionData.user) {
-              console.log(`🔄 Found valid stored ${sessionData.user.role} session for ${sessionData.user.username}, restoring...`);
-
-              // Set user immediately from localStorage to prevent redirect
-              setUser(sessionData.user);
-
-              // Try to verify with server in background (but don't fail if it doesn't work)
-              try {
-                const verifyRes = await axios.get('/api/users/me', {
-                  withCredentials: true
-                });
-                console.log('✅ Server session verified, updating user data');
-                setUser(verifyRes.data);
-
-                // Update localStorage with fresh data
-                const sessionKey = verifyRes.data.role === 'admin' ? 'adminSession' : 'userSession';
-                localStorage.setItem(sessionKey, JSON.stringify({
-                  user: verifyRes.data,
-                  timestamp: Date.now()
-                }));
-              } catch (verifyErr) {
-                console.log('⚠️ Server session expired, but keeping localStorage session');
-                // Keep the user logged in from localStorage even if server session expired
-                // This ensures persistence across browser restarts
-                console.log('🔄 User remains logged in from localStorage session');
-              }
-            } else {
-              console.log('❌ Stored session is too old or invalid, clearing');
-              localStorage.removeItem('adminSession');
-              localStorage.removeItem('userSession');
-              setUser(null);
-            }
-          } catch (parseErr) {
-            console.log('❌ Invalid stored session data, clearing');
-            localStorage.removeItem('adminSession');
-            localStorage.removeItem('userSession');
-            setUser(null);
-          }
-        } else {
-          console.log('❌ No stored session found');
-          setUser(null);
-        }
+        // If no recent localStorage session found, clear everything
+        console.log('❌ No valid session found, clearing user state');
+        localStorage.removeItem('adminSession');
+        localStorage.removeItem('userSession');
+        setUser(null);
       } finally {
         setLoading(false);
       }
