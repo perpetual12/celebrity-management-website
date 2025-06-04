@@ -170,7 +170,17 @@ function App() {
       }
     };
 
-    checkAuthStatus();
+    // Only check auth status if we're not on public pages
+    const currentPath = window.location.pathname;
+    const publicPaths = ['/login', '/register', '/admin-login', '/', '/celebrities', '/help', '/contact', '/privacy', '/terms'];
+
+    if (!publicPaths.some(path => currentPath.startsWith(path))) {
+      console.log('🔍 Checking auth status for protected route:', currentPath);
+      checkAuthStatus();
+    } else {
+      console.log('📍 On public page, skipping auth check:', currentPath);
+      setLoading(false);
+    }
   }, []);
 
   if (loading) {

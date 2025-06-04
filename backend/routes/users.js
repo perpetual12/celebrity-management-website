@@ -112,12 +112,20 @@ router.post('/logout', (req, res, next) => {
 
 // Get current user
 router.get('/me', (req, res) => {
+  console.log('🔍 /me endpoint called');
+  console.log('   - Session ID:', req.sessionID);
+  console.log('   - Session exists:', !!req.session);
+  console.log('   - User authenticated:', req.isAuthenticated());
+  console.log('   - User in session:', !!req.user);
+
   if (!req.isAuthenticated()) {
+    console.log('❌ User not authenticated, returning 401');
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
   // Remove password from response
   const { password, ...userWithoutPassword } = req.user;
+  console.log('✅ Returning user data for:', userWithoutPassword.username);
   res.json(userWithoutPassword);
 });
 
