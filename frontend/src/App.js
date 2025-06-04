@@ -33,9 +33,15 @@ import TMDbSetup from './pages/TMDbSetup';
 import TestCelebrities from './pages/TestCelebrities';
 
 
-// Set up axios defaults
-// Note: Using proxy configuration in package.json instead of baseURL
+// Set up axios defaults for production
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+console.log('🌐 API Base URL:', API_BASE_URL || 'Using relative URLs (development)');
+
+if (API_BASE_URL) {
+  axios.defaults.baseURL = API_BASE_URL;
+}
 axios.defaults.withCredentials = true;
+axios.defaults.timeout = 10000; // 10 second timeout
 
 function App() {
   const [user, setUser] = useState(null);

@@ -87,13 +87,23 @@ router.get('/database', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
       -- Insert default admin user (password: admin123)
-      INSERT INTO users (username, email, password, role, full_name) 
+      INSERT INTO users (username, email, password, role, full_name)
       VALUES (
-          'admin', 
-          'admin@celebrityconnect.com', 
+          'admin',
+          'admin@celebrityconnect.com',
           '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
-          'admin', 
+          'admin',
           'System Administrator'
+      ) ON CONFLICT (username) DO NOTHING;
+
+      -- Insert test user (password: test123)
+      INSERT INTO users (username, email, password, role, full_name)
+      VALUES (
+          'testuser',
+          'test@celebrityconnect.com',
+          '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+          'user',
+          'Test User'
       ) ON CONFLICT (username) DO NOTHING;
     `;
 
@@ -138,16 +148,19 @@ router.get('/status', async (req, res) => {
   try {
     const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
     const tablesResult = await client.query(`
-      SELECT COUNT(*) as table_count 
-      FROM information_schema.tables 
+      SELECT COUNT(*) as table_count
+      FROM information_schema.tables
       WHERE table_schema = 'public'
     `);
+
+    const usersResult = await client.query('SELECT username, email, role FROM users ORDER BY created_at');
 
     res.json({
       database_connected: true,
       current_time: result.rows[0].current_time,
       postgres_version: result.rows[0].postgres_version,
       tables_count: parseInt(tablesResult.rows[0].table_count),
+      users: usersResult.rows,
       message: 'Database is connected and ready!'
     });
   } catch (error) {
@@ -155,6 +168,58 @@ router.get('/status', async (req, res) => {
       database_connected: false,
       error: error.message,
       message: 'Database connection failed'
+    });
+  }
+});
+
+// Test login functionality
+router.post('/test-login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username and password are required'
+      });
+    }
+
+    // Check if user exists
+    const userResult = await client.query('SELECT * FROM users WHERE username = $1', [username]);
+
+    if (userResult.rows.length === 0) {
+      return res.json({
+        success: false,
+        error: 'User not found',
+        debug: {
+          username_provided: username,
+          users_in_db: await client.query('SELECT username FROM users').then(r => r.rows.map(u => u.username))
+        }
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Test password
+    const bcrypt = await import('bcrypt');
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    res.json({
+      success: isMatch,
+      message: isMatch ? 'Login credentials are valid' : 'Invalid password',
+      debug: {
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        password_match: isMatch
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Login test failed'
     });
   }
 });

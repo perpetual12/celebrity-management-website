@@ -24,31 +24,67 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:3000', 'https://localhost:3000'];
 
+console.log('🌐 CORS allowed origins:', allowedOrigins);
+
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Enhanced CORS configuration
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // For development, allow any localhost
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+
+    // For Render deployments, allow .onrender.com domains
+    if (origin.includes('.onrender.com')) {
+      return callback(null, true);
+    }
+
+    console.log('❌ CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Set-Cookie'],
+  optionsSuccessStatus: 200
 }));
 
 // Session configuration
+const isProduction = process.env.NODE_ENV === 'production';
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'celebrity-connect-secret',
   resave: false,
   saveUninitialized: false,
+  name: 'celebrity-connect-session',
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // HTTPS in production
+    secure: false, // Set to false for now to test - we'll enable HTTPS later
     httpOnly: true,
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days for persistent sessions
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    sameSite: 'lax', // Changed from 'none' to 'lax' for better compatibility
+    domain: undefined // Let the browser handle this
   }
 };
 
+console.log('🔐 Session configuration:');
+console.log('   - Environment:', process.env.NODE_ENV || 'development');
+console.log('   - Secure cookies:', sessionConfig.cookie.secure);
+console.log('   - SameSite:', sessionConfig.cookie.sameSite);
+console.log('   - Session secret length:', sessionConfig.secret.length);
+
 // In production, we'll use the default MemoryStore but with proper configuration
-// For a more robust solution, you could use connect-pg-simple or redis
-if (process.env.NODE_ENV === 'production') {
+if (isProduction) {
   console.log('⚠️  Using MemoryStore for sessions in production');
   console.log('💡 For high-traffic apps, consider using connect-pg-simple or Redis');
 }

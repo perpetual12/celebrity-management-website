@@ -64,11 +64,39 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
-router.post('/login', passport.authenticate('local'), (req, res) => {
-  // Remove password from response
-  const { password, ...userWithoutPassword } = req.user;
-  res.json({ user: userWithoutPassword });
+// Login with better error handling
+router.post('/login', (req, res, next) => {
+  console.log('🔐 Login attempt for user:', req.body.username);
+
+  passport.authenticate('local', (err, user, info) => {
+    if (err) {
+      console.error('❌ Login error:', err);
+      return res.status(500).json({ error: 'Internal server error during login' });
+    }
+
+    if (!user) {
+      console.log('❌ Login failed:', info?.message || 'Invalid credentials');
+      return res.status(401).json({
+        error: info?.message || 'Invalid username or password'
+      });
+    }
+
+    req.logIn(user, (err) => {
+      if (err) {
+        console.error('❌ Session creation error:', err);
+        return res.status(500).json({ error: 'Failed to create session' });
+      }
+
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      console.log('✅ Login successful for user:', user.username);
+
+      res.json({
+        user: userWithoutPassword,
+        message: 'Login successful'
+      });
+    });
+  })(req, res, next);
 });
 
 // Logout
