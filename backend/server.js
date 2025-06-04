@@ -11,6 +11,7 @@ import messagesRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import notificationsRoutes from './routes/notifications.js';
 import tmdbRoutes from './routes/tmdb.js';
+import setupRoutes from './routes/setup.js';
 import client from './config/database.js';
 
 dotenv.config();
@@ -78,6 +79,7 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tmdb', tmdbRoutes);
+app.use('/api/setup', setupRoutes);
 
 // Test database connection and start server
 console.log('🔍 Testing database connection...');
