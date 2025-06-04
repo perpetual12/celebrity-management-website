@@ -1,0 +1,33 @@
+services:
+  # Backend API Service
+  - type: web
+    name: celebrity-connect-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_SECRET_KEY
+        value: CELEBRITY_ADMIN_2024_SECURE
+    
+  # Frontend Static Site
+  - type: web
+    name: celebrity-connect-frontend
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/build
+    
+  # PostgreSQL Database
+  - type: pserv
+    name: celebrity-connect-db
+    env: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile.postgres

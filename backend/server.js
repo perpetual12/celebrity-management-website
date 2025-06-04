@@ -32,7 +32,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(session({
+// Session configuration
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'celebrity-connect-secret',
   resave: false,
   saveUninitialized: false,
@@ -42,7 +43,16 @@ app.use(session({
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days for persistent sessions
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   }
-}));
+};
+
+// In production, we'll use the default MemoryStore but with proper configuration
+// For a more robust solution, you could use connect-pg-simple or redis
+if (process.env.NODE_ENV === 'production') {
+  console.log('⚠️  Using MemoryStore for sessions in production');
+  console.log('💡 For high-traffic apps, consider using connect-pg-simple or Redis');
+}
+
+app.use(session(sessionConfig));
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -70,16 +80,34 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/tmdb', tmdbRoutes);
 
 // Test database connection and start server
-client.query('SELECT NOW()')
-  .then(() => {
+console.log('🔍 Testing database connection...');
+console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
+console.log('🔗 Database URL provided:', !!process.env.DATABASE_URL);
+
+client.query('SELECT NOW() as current_time, version() as postgres_version')
+  .then((result) => {
     console.log('✅ Database connected successfully');
-    app.listen(PORT, () => {
+    console.log('⏰ Database time:', result.rows[0].current_time);
+    console.log('🗄️ PostgreSQL version:', result.rows[0].postgres_version.split(' ')[0]);
+
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📡 API available at http://localhost:${PORT}/api`);
+      console.log(`🌐 Health check: http://localhost:${PORT}/health`);
       console.log('🔧 Ready to accept requests');
     });
   })
   .catch(err => {
-    console.error('❌ Failed to connect to database:', err);
-    console.error('Please check your database configuration in .env file');
+    console.error('❌ Failed to connect to database:', err.message);
+    console.error('🔍 Error details:', err);
+    console.error('🔧 Database config check:');
+    console.error('   - DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    console.error('   - NODE_ENV:', process.env.NODE_ENV);
+
+    // Still start the server even if database fails (for debugging)
+    console.log('⚠️  Starting server without database connection for debugging...');
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT} (DATABASE DISCONNECTED)`);
+      console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+    });
   });

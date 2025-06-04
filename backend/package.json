@@ -5,10 +5,11 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node start.js",
     "dev": "nodemon server.js",
-    "build": "echo 'Build completed'",
-    "setup-db": "node setup-db.js"
+    "build": "echo 'Build completed successfully'",
+    "setup-db": "node setup-db.js",
+    "server": "node server.js"
   },
   "engines": {
     "node": ">=16.0.0",
