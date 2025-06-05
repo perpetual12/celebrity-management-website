@@ -102,63 +102,70 @@ router.get('/my-appointments', isAuthenticated, async (req, res) => {
 // Book an appointment with a celebrity
 router.post('/', isAuthenticated, async (req, res) => {
   try {
-    const { celebrityId, celebrityName, celebrityType, date, purpose } = req.body;
+    const { celebrityId, date, purpose } = req.body;
 
-    console.log('📅 Booking appointment:', { celebrityId, celebrityName, celebrityType, date, purpose });
+    console.log('📅 Booking appointment:', {
+      userId: req.user.id,
+      username: req.user.username,
+      celebrityId,
+      date,
+      purpose
+    });
 
-    if (celebrityType === 'wikipedia' && celebrityName) {
-      // For Wikipedia celebrities, create appointment with celebrity name
-      const appointmentResult = await client.query(
-        'INSERT INTO appointments (user_id, celebrity_name, celebrity_type, date, purpose, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [req.user.id, celebrityName, 'wikipedia', date, purpose, 'pending']
-      );
-
-      console.log('✅ Wikipedia celebrity appointment created:', appointmentResult.rows[0]);
-      res.status(201).json({
-        ...appointmentResult.rows[0],
-        Celebrity: {
-          name: celebrityName,
-          type: 'wikipedia'
-        }
+    // Validate required fields
+    if (!celebrityId || !date || !purpose) {
+      return res.status(400).json({
+        error: 'Missing required fields: celebrityId, date, and purpose are required'
       });
-    } else if (celebrityId) {
-      // For local celebrities, check if celebrity exists and is available for booking
-      const celebrityResult = await client.query(
-        'SELECT * FROM celebrities WHERE id = $1',
-        [celebrityId]
-      );
-
-      if (celebrityResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Celebrity not found' });
-      }
-
-      const celebrity = celebrityResult.rows[0];
-
-      if (!celebrity.available_for_booking) {
-        return res.status(400).json({ error: 'Celebrity is not available for booking' });
-      }
-
-      // Create appointment with local celebrity
-      const appointmentResult = await client.query(
-        'INSERT INTO appointments (user_id, celebrity_id, celebrity_type, date, purpose, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [req.user.id, celebrityId, 'local', date, purpose, 'pending']
-      );
-
-      console.log('✅ Local celebrity appointment created:', appointmentResult.rows[0]);
-      res.status(201).json({
-        ...appointmentResult.rows[0],
-        Celebrity: {
-          id: celebrity.id,
-          name: celebrity.name,
-          type: 'local'
-        }
-      });
-    } else {
-      return res.status(400).json({ error: 'Either celebrityId or celebrityName is required' });
     }
+
+    // Check if celebrity exists and is available for booking
+    const celebrityResult = await client.query(
+      'SELECT * FROM celebrities WHERE id = $1',
+      [celebrityId]
+    );
+
+    if (celebrityResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Celebrity not found' });
+    }
+
+    const celebrity = celebrityResult.rows[0];
+
+    if (!celebrity.available_for_booking) {
+      return res.status(400).json({ error: 'Celebrity is not available for booking' });
+    }
+
+    // Create appointment (using the correct schema)
+    const appointmentResult = await client.query(
+      'INSERT INTO appointments (user_id, celebrity_id, date, purpose, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [req.user.id, celebrityId, date, purpose, 'pending']
+    );
+
+    console.log('✅ Appointment created successfully:', appointmentResult.rows[0]);
+
+    // Return appointment with celebrity details
+    res.status(201).json({
+      ...appointmentResult.rows[0],
+      Celebrity: {
+        id: celebrity.id,
+        name: celebrity.name,
+        profile_image: celebrity.profile_image,
+        category: celebrity.category
+      }
+    });
+
   } catch (err) {
     console.error('❌ Error creating appointment:', err);
-    res.status(400).json({ error: err.message });
+
+    // Handle specific database errors
+    if (err.code === '23503') { // Foreign key violation
+      return res.status(400).json({ error: 'Invalid celebrity ID or user ID' });
+    }
+
+    res.status(500).json({
+      error: 'Failed to create appointment',
+      details: err.message
+    });
   }
 });
 

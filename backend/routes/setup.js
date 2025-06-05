@@ -782,4 +782,88 @@ router.post('/quick-setup', async (req, res) => {
   }
 });
 
+// Test appointment booking
+router.post('/test-appointment', async (req, res) => {
+  try {
+    // Get test user and celebrity
+    const testUser = await client.query('SELECT * FROM users WHERE username = $1', ['testuser']);
+    const testCelebrity = await client.query('SELECT * FROM celebrities LIMIT 1');
+
+    if (testUser.rows.length === 0) {
+      return res.status(404).json({ error: 'Test user not found' });
+    }
+
+    if (testCelebrity.rows.length === 0) {
+      return res.status(404).json({ error: 'No celebrities found' });
+    }
+
+    const user = testUser.rows[0];
+    const celebrity = testCelebrity.rows[0];
+
+    // Create test appointment
+    const appointmentResult = await client.query(
+      'INSERT INTO appointments (user_id, celebrity_id, date, purpose, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [user.id, celebrity.id, new Date(Date.now() + 24 * 60 * 60 * 1000), 'Test appointment booking', 'pending']
+    );
+
+    res.json({
+      success: true,
+      message: 'Test appointment created successfully',
+      appointment: appointmentResult.rows[0],
+      user: { id: user.id, username: user.username },
+      celebrity: { id: celebrity.id, name: celebrity.name }
+    });
+
+  } catch (error) {
+    console.error('❌ Test appointment error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to create test appointment'
+    });
+  }
+});
+
+// Test message sending
+router.post('/test-message', async (req, res) => {
+  try {
+    // Get test user and celebrity
+    const testUser = await client.query('SELECT * FROM users WHERE username = $1', ['testuser']);
+    const testCelebrity = await client.query('SELECT * FROM celebrities LIMIT 1');
+
+    if (testUser.rows.length === 0) {
+      return res.status(404).json({ error: 'Test user not found' });
+    }
+
+    if (testCelebrity.rows.length === 0) {
+      return res.status(404).json({ error: 'No celebrities found' });
+    }
+
+    const user = testUser.rows[0];
+    const celebrity = testCelebrity.rows[0];
+
+    // Create test message
+    const messageResult = await client.query(
+      'INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *',
+      [user.id, celebrity.user_id, 'Test message from user to celebrity']
+    );
+
+    res.json({
+      success: true,
+      message: 'Test message created successfully',
+      messageData: messageResult.rows[0],
+      user: { id: user.id, username: user.username },
+      celebrity: { id: celebrity.id, name: celebrity.name, user_id: celebrity.user_id }
+    });
+
+  } catch (error) {
+    console.error('❌ Test message error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to create test message'
+    });
+  }
+});
+
 export default router;

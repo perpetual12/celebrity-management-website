@@ -160,60 +160,64 @@ router.get('/my-messages', isAuthenticated, async (req, res) => {
 // Send a message to a celebrity
 router.post('/', isAuthenticated, async (req, res) => {
   try {
-    const { celebrityId, celebrityName, celebrityType, content, isReference } = req.body;
+    const { celebrityId, content } = req.body;
 
-    console.log('💬 Sending message:', { celebrityId, celebrityName, celebrityType, content, isReference });
+    console.log('💬 Sending message:', {
+      userId: req.user.id,
+      username: req.user.username,
+      celebrityId,
+      content
+    });
 
-    if (celebrityType === 'wikipedia' && celebrityName) {
-      // For Wikipedia celebrities, create message as reference/note
-      const messageResult = await client.query(
-        'INSERT INTO messages (sender_id, celebrity_name, celebrity_type, content, is_reference) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [req.user.id, celebrityName, 'wikipedia', content, true]
-      );
-
-      console.log('✅ Wikipedia celebrity message created:', messageResult.rows[0]);
-      res.status(201).json({
-        ...messageResult.rows[0],
-        Celebrity: {
-          name: celebrityName,
-          type: 'wikipedia'
-        }
+    // Validate required fields
+    if (!celebrityId || !content) {
+      return res.status(400).json({
+        error: 'Missing required fields: celebrityId and content are required'
       });
-    } else if (celebrityId) {
-      // For local celebrities, check if celebrity exists and get their user_id
-      const celebrityResult = await client.query(
-        'SELECT id, user_id, name FROM celebrities WHERE id = $1',
-        [celebrityId]
-      );
-
-      if (celebrityResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Celebrity not found' });
-      }
-
-      const celebrity = celebrityResult.rows[0];
-      const celebrityUserId = celebrity.user_id;
-
-      // Create message (user to celebrity)
-      const messageResult = await client.query(
-        'INSERT INTO messages (sender_id, receiver_id, celebrity_id, celebrity_type, content, is_reference) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [req.user.id, celebrityUserId, celebrityId, 'local', content, false]
-      );
-
-      console.log('✅ Local celebrity message created:', messageResult.rows[0]);
-      res.status(201).json({
-        ...messageResult.rows[0],
-        Celebrity: {
-          id: celebrity.id,
-          name: celebrity.name,
-          type: 'local'
-        }
-      });
-    } else {
-      return res.status(400).json({ error: 'Either celebrityId or celebrityName is required' });
     }
+
+    // Check if celebrity exists and get their user_id
+    const celebrityResult = await client.query(
+      'SELECT id, user_id, name FROM celebrities WHERE id = $1',
+      [celebrityId]
+    );
+
+    if (celebrityResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Celebrity not found' });
+    }
+
+    const celebrity = celebrityResult.rows[0];
+    const celebrityUserId = celebrity.user_id;
+
+    // Create message (user to celebrity) using correct schema
+    const messageResult = await client.query(
+      'INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *',
+      [req.user.id, celebrityUserId, content]
+    );
+
+    console.log('✅ Message created successfully:', messageResult.rows[0]);
+
+    // Return message with celebrity details
+    res.status(201).json({
+      ...messageResult.rows[0],
+      Celebrity: {
+        id: celebrity.id,
+        name: celebrity.name
+      }
+    });
+
   } catch (err) {
     console.error('❌ Error creating message:', err);
-    res.status(400).json({ error: err.message });
+
+    // Handle specific database errors
+    if (err.code === '23503') { // Foreign key violation
+      return res.status(400).json({ error: 'Invalid celebrity ID or user ID' });
+    }
+
+    res.status(500).json({
+      error: 'Failed to send message',
+      details: err.message
+    });
   }
 });
 
