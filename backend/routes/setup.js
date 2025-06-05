@@ -245,10 +245,18 @@ router.get('/status', async (req, res) => {
 
 // Check session status
 router.get('/session', (req, res) => {
+  console.log('🔍 Session debug request:');
+  console.log('   - Session ID:', req.sessionID);
+  console.log('   - Session exists:', !!req.session);
+  console.log('   - User authenticated:', req.isAuthenticated());
+  console.log('   - User in session:', !!req.user);
+  console.log('   - Has cookies:', !!req.headers.cookie);
+
   res.json({
     session_exists: !!req.session,
     session_id: req.sessionID,
-    user_authenticated: !!req.user,
+    user_authenticated: req.isAuthenticated(),
+    has_cookies: !!req.headers.cookie,
     user_info: req.user ? {
       username: req.user.username,
       role: req.user.role,
@@ -258,6 +266,7 @@ router.get('/session', (req, res) => {
       cookie: req.session.cookie,
       passport: req.session.passport
     } : null,
+    cookies_received: req.headers.cookie || 'None',
     timestamp: new Date().toISOString()
   });
 });

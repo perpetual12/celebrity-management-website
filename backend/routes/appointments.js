@@ -5,10 +5,25 @@ const router = Router();
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req, res, next) => {
+  console.log('🔐 Authentication check:');
+  console.log('   - Session ID:', req.sessionID);
+  console.log('   - Session exists:', !!req.session);
+  console.log('   - User authenticated:', req.isAuthenticated());
+  console.log('   - User in session:', !!req.user);
+  console.log('   - User details:', req.user ? { id: req.user.id, username: req.user.username } : 'None');
+
   if (req.isAuthenticated()) {
+    console.log('✅ User authenticated, proceeding...');
     return next();
   }
-  res.status(401).json({ error: 'Not authenticated' });
+
+  console.log('❌ User not authenticated, returning 401');
+  res.status(401).json({
+    error: 'Not authenticated',
+    sessionId: req.sessionID,
+    hasSession: !!req.session,
+    isAuthenticated: req.isAuthenticated()
+  });
 };
 
 // Get all appointments for the current user

@@ -69,20 +69,26 @@ const CelebrityProfile = ({ user }) => {
     }
 
     try {
+      console.log('💬 Sending message to celebrity:', celebrity.name);
+      console.log('💬 User:', user.username);
+      console.log('💬 Message data:', { content: messageForm.content, celebrityId: celebrity.id });
+
       const messageData = {
         content: messageForm.content,
-        celebrityId: celebrity.id,
-        celebrityType: 'local'
+        celebrityId: celebrity.id
       };
 
-      await axios.post('/api/messages', messageData);
+      const response = await axios.post('/api/messages', messageData, {
+        withCredentials: true
+      });
 
-      const successMessage = 'Message sent successfully!';
-
-      setSuccess(successMessage);
+      console.log('✅ Message sent successfully:', response.data);
+      setSuccess('Message sent successfully!');
       setMessageForm({ content: '' });
       setError('');
     } catch (err) {
+      console.error('❌ Message sending failed:', err);
+      console.error('❌ Error response:', err.response?.data);
       setError(err.response?.data?.error || 'Failed to send message');
       setSuccess('');
     }
@@ -96,18 +102,27 @@ const CelebrityProfile = ({ user }) => {
     }
 
     try {
+      console.log('📅 Booking appointment with celebrity:', celebrity.name);
+      console.log('📅 User:', user.username);
+      console.log('📅 Appointment data:', { date: appointmentForm.date, purpose: appointmentForm.purpose, celebrityId: celebrity.id });
+
       const appointmentData = {
         date: appointmentForm.date,
         purpose: appointmentForm.purpose,
-        celebrityId: celebrity.id,
-        celebrityType: 'local'
+        celebrityId: celebrity.id
       };
 
-      await axios.post('/api/appointments', appointmentData);
+      const response = await axios.post('/api/appointments', appointmentData, {
+        withCredentials: true
+      });
+
+      console.log('✅ Appointment booked successfully:', response.data);
       setSuccess('Appointment request sent successfully!');
       setAppointmentForm({ date: '', purpose: '' });
       setError('');
     } catch (err) {
+      console.error('❌ Appointment booking failed:', err);
+      console.error('❌ Error response:', err.response?.data);
       setError(err.response?.data?.error || 'Failed to book appointment');
       setSuccess('');
     }
