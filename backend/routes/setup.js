@@ -1031,4 +1031,218 @@ router.post('/test-admin-login', async (req, res) => {
   }
 });
 
+// Debug current authentication state
+router.get('/debug-auth', async (req, res) => {
+  try {
+    console.log('🔍 Debug Auth Request:');
+    console.log('   - Session ID:', req.sessionID);
+    console.log('   - Session exists:', !!req.session);
+    console.log('   - User authenticated:', req.isAuthenticated());
+    console.log('   - User in session:', !!req.user);
+    console.log('   - User details:', req.user);
+    console.log('   - Session data:', req.session);
+    console.log('   - Cookies:', req.headers.cookie);
+
+    // Check what users exist in database
+    const usersResult = await client.query('SELECT id, username, role, email FROM users ORDER BY created_at');
+
+    // Check admin user specifically
+    const adminResult = await client.query('SELECT * FROM users WHERE role = $1', ['admin']);
+
+    res.json({
+      session: {
+        id: req.sessionID,
+        exists: !!req.session,
+        authenticated: req.isAuthenticated(),
+        user: req.user || null,
+        data: req.session || null
+      },
+      cookies: req.headers.cookie || 'None',
+      database: {
+        total_users: usersResult.rows.length,
+        users: usersResult.rows,
+        admin_users: adminResult.rows
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Debug auth error:', error);
+    res.status(500).json({
+      error: error.message,
+      message: 'Failed to debug authentication'
+    });
+  }
+});
+
+// Force complete setup - creates everything from scratch
+router.post('/force-setup', async (req, res) => {
+  try {
+    console.log('🚀 FORCE SETUP: Starting complete database setup...');
+    const results = [];
+
+    // Import bcrypt
+    const bcrypt = await import('bcrypt');
+
+    // 1. Create all tables
+    console.log('📋 Creating tables...');
+    await client.query(`
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+      -- Users table
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        username VARCHAR(50) UNIQUE NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'celebrity', 'admin')),
+        full_name VARCHAR(100),
+        profile_image VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Celebrities table
+      CREATE TABLE IF NOT EXISTS celebrities (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        bio TEXT,
+        category VARCHAR(50),
+        profile_image VARCHAR(500),
+        available_for_booking BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Appointments table
+      CREATE TABLE IF NOT EXISTS appointments (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        celebrity_id UUID REFERENCES celebrities(id) ON DELETE CASCADE,
+        date TIMESTAMP NOT NULL,
+        purpose TEXT,
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'completed')),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Messages table
+      CREATE TABLE IF NOT EXISTS messages (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        receiver_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Notifications table
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(200),
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        related_appointment_id UUID,
+        related_message_id UUID,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    results.push('✅ All tables created');
+
+    // 2. Delete existing admin user if exists
+    await client.query('DELETE FROM users WHERE username = $1', ['admin']);
+    results.push('🗑️ Removed existing admin user');
+
+    // 3. Create fresh admin user
+    const adminPassword = await bcrypt.default.hash('admin123', 10);
+    const adminResult = await client.query(`
+      INSERT INTO users (username, email, password, role, full_name)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, username, email, role, created_at
+    `, ['admin', 'admin@celebrityconnect.com', adminPassword, 'admin', 'System Administrator']);
+
+    const admin = adminResult.rows[0];
+    results.push(`✅ Admin user created: ${admin.username} (${admin.id})`);
+
+    // 4. Create test user if doesn't exist
+    const testPassword = await bcrypt.default.hash('test123', 10);
+    const testResult = await client.query(`
+      INSERT INTO users (username, email, password, role, full_name)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (username) DO NOTHING
+      RETURNING id, username
+    `, ['testuser', 'test@celebrityconnect.com', testPassword, 'user', 'Test User']);
+
+    if (testResult.rows.length > 0) {
+      results.push(`✅ Test user created: ${testResult.rows[0].username}`);
+    } else {
+      results.push('⏭️ Test user already exists');
+    }
+
+    // 5. Create sample celebrities
+    const celebrities = [
+      { name: 'Tom Hanks', bio: 'Academy Award-winning actor', category: 'Actor' },
+      { name: 'Taylor Swift', bio: 'Grammy Award-winning singer', category: 'Musician' },
+      { name: 'Oprah Winfrey', bio: 'Media mogul and philanthropist', category: 'TV Host' }
+    ];
+
+    for (const celeb of celebrities) {
+      // Create user for celebrity
+      const celebPassword = await bcrypt.default.hash('celeb123', 10);
+      const celebUserResult = await client.query(`
+        INSERT INTO users (username, email, password, role, full_name)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (username) DO NOTHING
+        RETURNING id, username
+      `, [
+        celeb.name.toLowerCase().replace(' ', ''),
+        `${celeb.name.toLowerCase().replace(' ', '')}@celebrityconnect.com`,
+        celebPassword,
+        'celebrity',
+        celeb.name
+      ]);
+
+      if (celebUserResult.rows.length > 0) {
+        // Create celebrity profile
+        await client.query(`
+          INSERT INTO celebrities (user_id, name, bio, category, available_for_booking)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT DO NOTHING
+        `, [celebUserResult.rows[0].id, celeb.name, celeb.bio, celeb.category, true]);
+
+        results.push(`✅ Celebrity created: ${celeb.name}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Force setup completed successfully',
+      results: results,
+      admin_credentials: {
+        username: 'admin',
+        password: 'admin123',
+        secret_key: process.env.ADMIN_SECRET_KEY || 'CELEBRITY_ADMIN_2024_SECURE'
+      },
+      test_credentials: {
+        username: 'testuser',
+        password: 'test123'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Force setup failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Force setup failed'
+    });
+  }
+});
+
 export default router;

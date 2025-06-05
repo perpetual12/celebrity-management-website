@@ -21,14 +21,38 @@ const validateSecretKey = (req, res, next) => {
 
 // Middleware to check if user is admin
 const isAdmin = (req, res, next) => {
+  console.log('🔐 Admin middleware check:');
+  console.log('   - Session ID:', req.sessionID);
+  console.log('   - Is authenticated:', req.isAuthenticated());
+  console.log('   - User exists:', !!req.user);
+  console.log('   - User details:', req.user);
+  console.log('   - User role:', req.user?.role);
+
   if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: 'Not authenticated' });
+    console.log('❌ Admin middleware: Not authenticated');
+    return res.status(401).json({
+      error: 'Not authenticated',
+      debug: {
+        sessionId: req.sessionID,
+        isAuthenticated: req.isAuthenticated(),
+        hasUser: !!req.user
+      }
+    });
   }
-  
+
   if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
+    console.log('❌ Admin middleware: Not admin role');
+    return res.status(403).json({
+      error: 'Admin access required',
+      debug: {
+        userRole: req.user.role,
+        userId: req.user.id,
+        username: req.user.username
+      }
+    });
   }
-  
+
+  console.log('✅ Admin middleware: Access granted');
   next();
 };
 
