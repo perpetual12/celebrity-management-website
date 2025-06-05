@@ -17,12 +17,12 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "serve -s build -l 3000",
+    "start": "serve -s build -l 3000 -c serve.json",
     "dev": "react-scripts start",
     "build": "CI=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "serve": "serve -s build"
+    "serve": "serve -s build -c serve.json"
   },
   "engines": {
     "node": ">=16.0.0",

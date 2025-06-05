@@ -113,7 +113,7 @@ router.get('/database', async (req, res) => {
       SELECT 'taylorswift', 'taylor@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Taylor Swift'
       WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'taylorswift');
 
-      -- Insert celebrity profiles
+      -- Insert celebrity profiles - ONLY if they don't exist
       INSERT INTO celebrities (user_id, name, bio, category, profile_image, available_for_booking)
       SELECT
           u.id,
@@ -144,7 +144,7 @@ router.get('/database', async (req, res) => {
           true
       FROM users u
       WHERE u.username IN ('tomhanks', 'oprah', 'therock', 'taylorswift')
-      ON CONFLICT DO NOTHING;
+        AND NOT EXISTS (SELECT 1 FROM celebrities WHERE user_id = u.id);
     `;
 
     await client.query(createTablesSQL);
@@ -293,6 +293,75 @@ router.post('/test-login', async (req, res) => {
       success: false,
       error: error.message,
       message: 'Login test failed'
+    });
+  }
+});
+
+// Add sample data without affecting existing data
+router.post('/add-sample-data', async (req, res) => {
+  try {
+    console.log('🔧 Adding sample data (preserving existing data)...');
+
+    // Add sample celebrities only if they don't exist
+    const sampleCelebrities = [
+      {
+        username: 'tomhanks',
+        email: 'tom@celebrityconnect.com',
+        fullName: 'Tom Hanks',
+        name: 'Tom Hanks',
+        bio: 'Academy Award-winning actor known for Forrest Gump, Cast Away, and Toy Story.',
+        category: 'Actor',
+        image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Tom_Hanks_TIFF_2019.jpg/400px-Tom_Hanks_TIFF_2019.jpg'
+      },
+      {
+        username: 'oprah',
+        email: 'oprah@celebrityconnect.com',
+        fullName: 'Oprah Winfrey',
+        name: 'Oprah Winfrey',
+        bio: 'Media mogul, talk show host, and philanthropist inspiring millions worldwide.',
+        category: 'Media Personality',
+        image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Oprah_in_2014.jpg/400px-Oprah_in_2014.jpg'
+      }
+    ];
+
+    let addedCount = 0;
+
+    for (const celeb of sampleCelebrities) {
+      // Check if user exists
+      const userExists = await client.query('SELECT id FROM users WHERE username = $1', [celeb.username]);
+
+      if (userExists.rows.length === 0) {
+        // Add user
+        const userResult = await client.query(
+          'INSERT INTO users (username, email, password, role, full_name) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+          [celeb.username, celeb.email, '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', celeb.fullName]
+        );
+
+        // Add celebrity profile
+        await client.query(
+          'INSERT INTO celebrities (user_id, name, bio, category, profile_image, available_for_booking) VALUES ($1, $2, $3, $4, $5, $6)',
+          [userResult.rows[0].id, celeb.name, celeb.bio, celeb.category, celeb.image, true]
+        );
+
+        addedCount++;
+        console.log(`✅ Added celebrity: ${celeb.name}`);
+      } else {
+        console.log(`⏭️ Celebrity ${celeb.name} already exists, skipping`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Sample data setup completed. Added ${addedCount} new celebrities.`,
+      added_celebrities: addedCount
+    });
+
+  } catch (error) {
+    console.error('❌ Error adding sample data:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to add sample data'
     });
   }
 });

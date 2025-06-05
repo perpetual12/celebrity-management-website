@@ -13,29 +13,54 @@ const Dashboard = ({ user }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('📊 Fetching dashboard data for user:', user.username, 'Role:', user.role);
+
         // If user is a celebrity, fetch their profile
         if (user.role === 'celebrity') {
-          const profileRes = await axios.get('/api/celebrities', {
-            withCredentials: true
-          });
-          const profile = profileRes.data.find(c => c.User && c.User.id === user.id);
-          setCelebrityProfile(profile);
+          try {
+            console.log('🎭 Fetching celebrity profile...');
+            const profileRes = await axios.get('/api/celebrities', {
+              withCredentials: true
+            });
+            console.log('🎭 Celebrity profiles response:', profileRes.data);
+            const profile = profileRes.data.find(c => c.username === user.username);
+            console.log('🎭 Found celebrity profile:', profile);
+            setCelebrityProfile(profile);
+          } catch (profileErr) {
+            console.error('❌ Error fetching celebrity profile:', profileErr);
+          }
         }
 
         // Fetch appointments
-        const appointmentsRes = await axios.get('/api/appointments/my-appointments', {
-          withCredentials: true
-        });
-        setAppointments(appointmentsRes.data);
+        try {
+          console.log('📅 Fetching appointments...');
+          const appointmentsRes = await axios.get('/api/appointments/my-appointments', {
+            withCredentials: true
+          });
+          console.log('📅 Appointments response:', appointmentsRes.data);
+          setAppointments(appointmentsRes.data);
+        } catch (appointmentsErr) {
+          console.error('❌ Error fetching appointments:', appointmentsErr);
+          setAppointments([]); // Set empty array instead of failing
+        }
 
         // Fetch messages
-        const messagesRes = await axios.get('/api/messages/my-messages', {
-          withCredentials: true
-        });
-        setMessages(messagesRes.data);
+        try {
+          console.log('💬 Fetching messages...');
+          const messagesRes = await axios.get('/api/messages/my-messages', {
+            withCredentials: true
+          });
+          console.log('💬 Messages response:', messagesRes.data);
+          setMessages(messagesRes.data);
+        } catch (messagesErr) {
+          console.error('❌ Error fetching messages:', messagesErr);
+          setMessages([]); // Set empty array instead of failing
+        }
+
+        console.log('✅ Dashboard data fetch completed');
       } catch (err) {
-        console.error('Error fetching dashboard data', err);
-        setError('Failed to load dashboard data');
+        console.error('❌ Error fetching dashboard data:', err);
+        setError(`Failed to load dashboard data: ${err.response?.data?.error || err.message}`);
       } finally {
         setLoading(false);
       }
