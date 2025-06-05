@@ -1,5 +1,6 @@
 import express from 'express';
 import client from '../config/database.js';
+import pkg from 'pg';
 
 const router = express.Router();
 
@@ -561,6 +562,87 @@ router.post('/migrate-external-data', async (req, res) => {
       success: false,
       error: error.message,
       message: 'Failed to migrate data'
+    });
+  }
+});
+
+// Health check endpoint
+router.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
+
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      timestamp: result.rows[0].current_time,
+      postgres_version: result.rows[0].postgres_version,
+      environment: process.env.NODE_ENV || 'development',
+      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL' : 'Environment Variables'
+    });
+  } catch (error) {
+    console.error('❌ Health check failed:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL' : 'Environment Variables'
+    });
+  }
+});
+
+// Test database connection endpoint
+router.post('/test-connection', async (req, res) => {
+  try {
+    const { databaseUrl } = req.body;
+
+    if (!databaseUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Database URL is required'
+      });
+    }
+
+    // Test connection with provided URL
+    const { Client } = pkg;
+    const testClient = new Client({
+      connectionString: databaseUrl,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000
+    });
+
+    try {
+      await testClient.connect();
+      const result = await testClient.query('SELECT NOW() as current_time, current_database() as db_name');
+      await testClient.end();
+
+      res.json({
+        success: true,
+        message: 'Database connection successful',
+        database_name: result.rows[0].db_name,
+        server_time: result.rows[0].current_time
+      });
+    } catch (testError) {
+      res.status(500).json({
+        success: false,
+        message: 'Database connection failed',
+        error: testError.message,
+        suggestions: [
+          'Check if database server is accessible from internet',
+          'Verify host and port in connection string',
+          'Check firewall settings',
+          'Verify database credentials',
+          'Ensure SSL configuration is correct'
+        ]
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to test database connection'
     });
   }
 });
