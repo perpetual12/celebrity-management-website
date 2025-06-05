@@ -88,10 +88,11 @@ router.get('/database', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
       -- Insert default admin user (password: admin123) - ALWAYS ensure admin exists
+      -- Using bcrypt hash for 'admin123': $2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi
       INSERT INTO users (username, email, password, role, full_name)
-      VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator')
+      VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 'System Administrator')
       ON CONFLICT (username) DO UPDATE SET
-        password = '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
+        password = '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
         role = 'admin',
         full_name = 'System Administrator';
 
@@ -664,17 +665,24 @@ router.post('/create-admin', async (req, res) => {
   try {
     console.log('👑 Creating/resetting admin user...');
 
+    // Import bcrypt for password hashing
+    const bcrypt = await import('bcrypt');
+
+    // Hash the password properly
+    const hashedPassword = await bcrypt.default.hash('admin123', 10);
+    console.log('🔐 Generated password hash for admin123');
+
     // Create or update admin user
     const result = await client.query(`
       INSERT INTO users (username, email, password, role, full_name)
-      VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator')
+      VALUES ('admin', 'admin@celebrityconnect.com', $1, 'admin', 'System Administrator')
       ON CONFLICT (username) DO UPDATE SET
-        password = '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
+        password = $1,
         role = 'admin',
         full_name = 'System Administrator',
         updated_at = CURRENT_TIMESTAMP
       RETURNING id, username, email, role, full_name, created_at
-    `);
+    `, [hashedPassword]);
 
     const adminUser = result.rows[0];
     console.log('✅ Admin user created/updated:', adminUser.username);
@@ -693,7 +701,14 @@ router.post('/create-admin', async (req, res) => {
       credentials: {
         username: 'admin',
         password: 'admin123',
-        note: 'Use these credentials to login to admin panel'
+        secret_key: process.env.ADMIN_SECRET_KEY || 'CELEBRITY_ADMIN_2024_SECURE',
+        note: 'Use these credentials and secret key to login to admin panel'
+      },
+      login_requirements: {
+        username: 'admin',
+        password: 'admin123',
+        secretKey: process.env.ADMIN_SECRET_KEY || 'CELEBRITY_ADMIN_2024_SECURE',
+        note: 'All three fields are required for admin login'
       }
     });
 
@@ -871,6 +886,147 @@ router.post('/test-message', async (req, res) => {
       success: false,
       error: error.message,
       message: 'Failed to create test message'
+    });
+  }
+});
+
+// Check admin user specifically
+router.get('/check-admin', async (req, res) => {
+  try {
+    console.log('👑 Checking admin user...');
+
+    // Check if admin user exists
+    const adminResult = await client.query(
+      'SELECT id, username, email, role, full_name, created_at FROM users WHERE username = $1',
+      ['admin']
+    );
+
+    if (adminResult.rows.length === 0) {
+      return res.json({
+        admin_exists: false,
+        message: 'Admin user does not exist',
+        suggestion: 'Run /api/setup/create-admin to create admin user'
+      });
+    }
+
+    const admin = adminResult.rows[0];
+
+    // Check password hash
+    const passwordResult = await client.query(
+      'SELECT password FROM users WHERE username = $1',
+      ['admin']
+    );
+
+    res.json({
+      admin_exists: true,
+      admin_info: {
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role,
+        full_name: admin.full_name,
+        created_at: admin.created_at
+      },
+      password_hash_preview: passwordResult.rows[0].password.substring(0, 20) + '...',
+      expected_credentials: {
+        username: 'admin',
+        password: 'admin123',
+        secret_key: 'celebrity-admin-2024'
+      },
+      message: 'Admin user found in database'
+    });
+
+  } catch (error) {
+    console.error('❌ Error checking admin user:', error);
+    res.status(500).json({
+      admin_exists: false,
+      error: error.message,
+      message: 'Failed to check admin user'
+    });
+  }
+});
+
+// Test admin login credentials
+router.post('/test-admin-login', async (req, res) => {
+  try {
+    const { username, password, secretKey } = req.body;
+
+    console.log('🧪 Testing admin login credentials...');
+    console.log('   - Username:', username);
+    console.log('   - Password provided:', !!password);
+    console.log('   - Secret key provided:', !!secretKey);
+
+    // Check admin user exists
+    const adminResult = await client.query(
+      'SELECT id, username, email, role, password FROM users WHERE username = $1',
+      [username || 'admin']
+    );
+
+    if (adminResult.rows.length === 0) {
+      return res.json({
+        success: false,
+        error: 'Admin user not found',
+        suggestion: 'Run /api/setup/create-admin first'
+      });
+    }
+
+    const admin = adminResult.rows[0];
+
+    // Check role
+    if (admin.role !== 'admin') {
+      return res.json({
+        success: false,
+        error: 'User is not an admin',
+        user_role: admin.role
+      });
+    }
+
+    // Check secret key
+    const expectedSecretKey = process.env.ADMIN_SECRET_KEY || 'CELEBRITY_ADMIN_2024_SECURE';
+    if (secretKey !== expectedSecretKey) {
+      return res.json({
+        success: false,
+        error: 'Invalid secret key',
+        expected_secret_key: expectedSecretKey,
+        provided_secret_key: secretKey
+      });
+    }
+
+    // Check password
+    const bcrypt = await import('bcrypt');
+    const isValidPassword = await bcrypt.default.compare(password || 'admin123', admin.password);
+
+    if (!isValidPassword) {
+      return res.json({
+        success: false,
+        error: 'Invalid password',
+        password_hash_preview: admin.password.substring(0, 20) + '...',
+        suggestion: 'Password should be "admin123"'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Admin login credentials are valid',
+      admin_info: {
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role
+      },
+      credentials_tested: {
+        username: username || 'admin',
+        password: 'admin123',
+        secret_key: expectedSecretKey
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error testing admin login:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to test admin login'
     });
   }
 });
