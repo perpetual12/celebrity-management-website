@@ -1245,4 +1245,96 @@ router.post('/force-setup', async (req, res) => {
   }
 });
 
+// Test database connection with detailed error reporting
+router.get('/test-db-connection', async (req, res) => {
+  try {
+    console.log('🔍 Testing database connection...');
+
+    // Test basic connection
+    const startTime = Date.now();
+    const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
+    const connectionTime = Date.now() - startTime;
+
+    console.log('✅ Database connection successful');
+    console.log('   - Connection time:', connectionTime + 'ms');
+    console.log('   - PostgreSQL version:', result.rows[0].postgres_version);
+
+    // Test if tables exist
+    const tablesResult = await client.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      ORDER BY table_name
+    `);
+
+    const tables = tablesResult.rows.map(row => row.table_name);
+    console.log('📋 Tables found:', tables);
+
+    // Test user count
+    let userCount = 0;
+    let adminCount = 0;
+
+    if (tables.includes('users')) {
+      const userResult = await client.query('SELECT COUNT(*) as count FROM users');
+      userCount = parseInt(userResult.rows[0].count);
+
+      const adminResult = await client.query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['admin']);
+      adminCount = parseInt(adminResult.rows[0].count);
+    }
+
+    res.json({
+      success: true,
+      connection: {
+        status: 'connected',
+        time_ms: connectionTime,
+        postgres_version: result.rows[0].postgres_version,
+        current_time: result.rows[0].current_time
+      },
+      database: {
+        tables_found: tables,
+        total_tables: tables.length,
+        has_users_table: tables.includes('users'),
+        has_celebrities_table: tables.includes('celebrities'),
+        has_appointments_table: tables.includes('appointments'),
+        has_messages_table: tables.includes('messages'),
+        has_notifications_table: tables.includes('notifications')
+      },
+      data: {
+        total_users: userCount,
+        admin_users: adminCount,
+        setup_needed: userCount === 0
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Database connection failed:', error);
+
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error.message,
+        code: error.code,
+        detail: error.detail,
+        hint: error.hint,
+        position: error.position
+      },
+      connection_string_info: {
+        has_database_url: !!process.env.DATABASE_URL,
+        url_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'Not set',
+        is_supabase: process.env.DATABASE_URL ? process.env.DATABASE_URL.includes('supabase.co') : false,
+        is_neon: process.env.DATABASE_URL ? process.env.DATABASE_URL.includes('neon.tech') : false
+      },
+      suggestions: [
+        'Check if DATABASE_URL is correctly formatted',
+        'Verify database credentials are correct',
+        'Ensure database server is accessible',
+        'Check if SSL is required (add ?sslmode=require to URL)',
+        'Verify the database exists and is not paused'
+      ],
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 export default router;

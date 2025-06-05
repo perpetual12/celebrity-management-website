@@ -13,13 +13,21 @@ const getDatabaseConfig = () => {
   // If DATABASE_URL is provided, use it
   if (process.env.DATABASE_URL) {
     console.log('📡 Using DATABASE_URL connection');
-    console.log('DATABASE_URL preview:', process.env.DATABASE_URL.substring(0, 30) + '...');
+    console.log('DATABASE_URL preview:', process.env.DATABASE_URL.substring(0, 50) + '...');
+
+    // Check if it's a Supabase connection
+    const isSupabase = process.env.DATABASE_URL.includes('supabase.co');
+    console.log('🔍 Supabase connection detected:', isSupabase);
 
     return {
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      connectionTimeoutMillis: 10000, // 10 seconds
+      ssl: {
+        rejectUnauthorized: false // Required for Supabase and most cloud databases
+      },
+      connectionTimeoutMillis: 15000, // 15 seconds for cloud databases
       idleTimeoutMillis: 30000, // 30 seconds
+      max: 10, // Maximum number of clients in the pool
+      min: 1, // Minimum number of clients in the pool
     };
   }
 
