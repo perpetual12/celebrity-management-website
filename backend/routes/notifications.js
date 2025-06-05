@@ -16,6 +16,20 @@ router.get('/my-notifications', isAuthenticated, async (req, res) => {
   try {
     console.log('🔔 Fetching notifications for user:', req.user.id, req.user.username);
 
+    // First check if notifications table exists
+    const tableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'notifications'
+      );
+    `);
+
+    if (!tableCheck.rows[0].exists) {
+      console.log('⚠️ Notifications table does not exist, returning empty array');
+      return res.json([]);
+    }
+
     const result = await client.query(`
       SELECT
         id, type, title, message, is_read, created_at, updated_at,

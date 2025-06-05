@@ -33,11 +33,43 @@ const AdminDashboard = ({ user, setUser }) => {
   const [celebrityToDelete, setCelebrityToDelete] = useState(null);
 
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
+    console.log('🔍 AdminDashboard useEffect - User state:', user);
+    console.log('🔍 User role:', user?.role);
+    console.log('🔍 Is admin?', user?.role === 'admin');
+
+    // Check localStorage for admin session if user is null
+    if (!user) {
+      const storedAdminSession = localStorage.getItem('adminSession');
+      console.log('🔍 Stored admin session:', !!storedAdminSession);
+
+      if (storedAdminSession) {
+        try {
+          const sessionData = JSON.parse(storedAdminSession);
+          console.log('🔍 Session data:', sessionData.user);
+
+          // If we have a recent admin session, wait for App.js to restore it
+          const isRecent = Date.now() - sessionData.timestamp < 24 * 60 * 60 * 1000;
+          if (isRecent && sessionData.user.role === 'admin') {
+            console.log('🔄 Found recent admin session, waiting for restoration...');
+            return; // Don't redirect yet, wait for App.js to restore the session
+          }
+        } catch (err) {
+          console.log('❌ Invalid admin session data');
+        }
+      }
+
+      console.log('❌ No valid admin session, redirecting to admin login');
+      navigate('/admin-login');
+      return;
+    }
+
+    if (user.role !== 'admin') {
+      console.log('❌ User is not admin, redirecting to home');
       navigate('/');
       return;
     }
-    
+
+    console.log('✅ Admin user verified, fetching dashboard data');
     fetchDashboardData();
   }, [user, navigate]);
 

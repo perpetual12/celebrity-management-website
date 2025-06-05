@@ -172,52 +172,77 @@ router.get('/my-messages', isAuthenticated, async (req, res) => {
   }
 });
 
-// Send a message to a celebrity
+// Send a message to a celebrity or admin
 router.post('/', isAuthenticated, async (req, res) => {
   try {
-    const { celebrityId, content } = req.body;
+    const { celebrityId, receiverId, content } = req.body;
 
     console.log('💬 Sending message:', {
       userId: req.user.id,
       username: req.user.username,
       celebrityId,
+      receiverId,
       content
     });
 
     // Validate required fields
-    if (!celebrityId || !content) {
+    if (!content) {
       return res.status(400).json({
-        error: 'Missing required fields: celebrityId and content are required'
+        error: 'Content is required'
       });
     }
 
-    // Check if celebrity exists and get their user_id
-    const celebrityResult = await client.query(
-      'SELECT id, user_id, name FROM celebrities WHERE id = $1',
-      [celebrityId]
-    );
+    let receiverUserId;
+    let receiverName;
 
-    if (celebrityResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Celebrity not found' });
+    if (celebrityId) {
+      // Sending to celebrity
+      const celebrityResult = await client.query(
+        'SELECT id, user_id, name FROM celebrities WHERE id = $1',
+        [celebrityId]
+      );
+
+      if (celebrityResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Celebrity not found' });
+      }
+
+      const celebrity = celebrityResult.rows[0];
+      receiverUserId = celebrity.user_id;
+      receiverName = celebrity.name;
+    } else if (receiverId) {
+      // Sending to specific user (like admin)
+      const userResult = await client.query(
+        'SELECT id, username, full_name, role FROM users WHERE id = $1',
+        [receiverId]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const user = userResult.rows[0];
+      receiverUserId = user.id;
+      receiverName = user.full_name || user.username;
+    } else {
+      return res.status(400).json({
+        error: 'Either celebrityId or receiverId is required'
+      });
     }
 
-    const celebrity = celebrityResult.rows[0];
-    const celebrityUserId = celebrity.user_id;
-
-    // Create message (user to celebrity) using correct schema
+    // Create message using correct schema
     const messageResult = await client.query(
       'INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *',
-      [req.user.id, celebrityUserId, content]
+      [req.user.id, receiverUserId, content]
     );
 
     console.log('✅ Message created successfully:', messageResult.rows[0]);
 
-    // Return message with celebrity details
+    // Return message with receiver details
     res.status(201).json({
       ...messageResult.rows[0],
-      Celebrity: {
-        id: celebrity.id,
-        name: celebrity.name
+      receiver: {
+        id: receiverUserId,
+        name: receiverName
       }
     });
 
@@ -226,7 +251,7 @@ router.post('/', isAuthenticated, async (req, res) => {
 
     // Handle specific database errors
     if (err.code === '23503') { // Foreign key violation
-      return res.status(400).json({ error: 'Invalid celebrity ID or user ID' });
+      return res.status(400).json({ error: 'Invalid celebrity ID, receiver ID, or user ID' });
     }
 
     res.status(500).json({
