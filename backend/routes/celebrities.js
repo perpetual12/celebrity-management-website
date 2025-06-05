@@ -14,11 +14,13 @@ const isAuthenticated = (req, res, next) => {
 // Get all celebrities with search and filter
 router.get('/', async (req, res) => {
   try {
+    console.log('🎭 Fetching all celebrities...');
     const { search, category, available } = req.query;
+
     let query = `
       SELECT
         c.id, c.name, c.bio, c.category, c.profile_image, c.available_for_booking, c.created_at, c.updated_at,
-        u.username, u.email
+        u.username, u.email, u.full_name
       FROM celebrities c
       JOIN users u ON c.user_id = u.id
       WHERE 1=1
@@ -49,17 +51,24 @@ router.get('/', async (req, res) => {
 
     query += ` ORDER BY c.created_at DESC`;
 
+    console.log('🎭 Executing query:', query);
+    console.log('🎭 Query params:', params);
+
     const result = await client.query(query, params);
+    console.log(`🎭 Found ${result.rows.length} celebrities in database`);
 
     // Transform snake_case to camelCase for frontend compatibility
     const transformedRows = result.rows.map(row => ({
       ...row,
       profileImage: row.profile_image,
-      availableForBooking: row.available_for_booking
+      availableForBooking: row.available_for_booking,
+      fullName: row.full_name
     }));
 
+    console.log('🎭 Returning celebrities:', transformedRows.map(c => ({ id: c.id, name: c.name, username: c.username })));
     res.json(transformedRows);
   } catch (err) {
+    console.error('❌ Error fetching celebrities:', err);
     res.status(500).json({ error: err.message });
   }
 });
