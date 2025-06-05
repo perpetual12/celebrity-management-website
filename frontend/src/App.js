@@ -48,105 +48,56 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Set up axios interceptor to handle authentication errors
+  // Removed axios interceptor that was causing login loops
+
   useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        // Only clear session on 401 if it's not a login attempt
-        if (error.response?.status === 401 && !error.config?.url?.includes('/login')) {
-          console.log('Authentication error detected, clearing user session');
-          setUser(null);
+    const initializeAuth = async () => {
+      console.log('🔍 Initializing authentication...');
+
+      // Check localStorage first
+      const storedAdminSession = localStorage.getItem('adminSession');
+      const storedUserSession = localStorage.getItem('userSession');
+      const storedSession = storedAdminSession || storedUserSession;
+
+      if (storedSession) {
+        try {
+          const sessionData = JSON.parse(storedSession);
+          const isRecent = Date.now() - sessionData.timestamp < 24 * 60 * 60 * 1000; // 24 hours
+
+          if (isRecent && sessionData.user) {
+            console.log(`✅ Found valid localStorage session for ${sessionData.user.username}`);
+            setUser(sessionData.user);
+            setLoading(false);
+            return; // Don't check server if we have valid localStorage session
+          }
+        } catch (err) {
+          console.log('❌ Invalid localStorage session, clearing');
           localStorage.removeItem('adminSession');
           localStorage.removeItem('userSession');
         }
-        return Promise.reject(error);
       }
-    );
 
-    return () => {
-      axios.interceptors.response.eject(interceptor);
-    };
-  }, []);
-
-  useEffect(() => {
-    // Check if user is already logged in
-    const checkAuthStatus = async () => {
+      // Only check server if no valid localStorage session
       try {
-        console.log('🔍 Checking authentication status...');
+        const res = await axios.get('/api/users/me', { withCredentials: true });
+        console.log('✅ Server session found for:', res.data.username);
+        setUser(res.data);
 
-        // First check localStorage for existing session
-        const storedAdminSession = localStorage.getItem('adminSession');
-        const storedUserSession = localStorage.getItem('userSession');
-        const storedSession = storedAdminSession || storedUserSession;
-
-        if (storedSession) {
-          try {
-            const sessionData = JSON.parse(storedSession);
-            const isRecent = Date.now() - sessionData.timestamp < 30 * 24 * 60 * 60 * 1000; // 30 days
-
-            if (isRecent && sessionData.user) {
-              console.log(`🔄 Found valid stored ${sessionData.user.role} session for ${sessionData.user.username}`);
-              // Set user immediately from localStorage to prevent redirect
-              setUser(sessionData.user);
-            }
-          } catch (parseErr) {
-            console.log('❌ Invalid stored session data, clearing');
-            localStorage.removeItem('adminSession');
-            localStorage.removeItem('userSession');
-          }
-        }
-
-        // Then try to verify with server
-        const res = await axios.get('/api/users/me', {
-          withCredentials: true
-        });
-        const userData = res.data;
-        console.log('✅ User authenticated via server session:', userData.username);
-        setUser(userData);
-
-        // Update localStorage with fresh data
-        const sessionKey = userData.role === 'admin' ? 'adminSession' : 'userSession';
+        // Store in localStorage
+        const sessionKey = res.data.role === 'admin' ? 'adminSession' : 'userSession';
         localStorage.setItem(sessionKey, JSON.stringify({
-          user: userData,
+          user: res.data,
           timestamp: Date.now()
         }));
       } catch (err) {
-        console.log('❌ Server session check failed:', err.response?.status);
-
-        // If we have a valid localStorage session but server check fails,
-        // keep the user logged in (they might have just logged in)
-        const storedAdminSession = localStorage.getItem('adminSession');
-        const storedUserSession = localStorage.getItem('userSession');
-        const storedSession = storedAdminSession || storedUserSession;
-
-        if (storedSession) {
-          try {
-            const sessionData = JSON.parse(storedSession);
-            const isRecent = Date.now() - sessionData.timestamp < 5 * 60 * 1000; // 5 minutes
-
-            if (isRecent && sessionData.user) {
-              console.log('🔄 Using recent localStorage session while server session establishes');
-              setUser(sessionData.user);
-              return; // Don't clear the session yet
-            }
-          } catch (parseErr) {
-            console.log('❌ Invalid stored session data');
-          }
-        }
-
-        // If no recent localStorage session found, clear everything
-        console.log('❌ No valid session found, clearing user state');
-        localStorage.removeItem('adminSession');
-        localStorage.removeItem('userSession');
+        console.log('❌ No server session found');
         setUser(null);
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
-    // Always check auth status, but don't fail on public pages
-    checkAuthStatus();
+    initializeAuth();
   }, []);
 
   if (loading) {

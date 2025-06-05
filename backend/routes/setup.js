@@ -86,34 +86,32 @@ router.get('/database', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON messages(receiver_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
-      -- Insert default admin user (password: admin123)
+      -- Insert default admin user (password: admin123) - ONLY if not exists
       INSERT INTO users (username, email, password, role, full_name)
-      VALUES (
-          'admin',
-          'admin@celebrityconnect.com',
-          '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
-          'admin',
-          'System Administrator'
-      ) ON CONFLICT (username) DO NOTHING;
+      SELECT 'admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator'
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
 
-      -- Insert test user (password: test123)
+      -- Insert test user (password: test123) - ONLY if not exists
       INSERT INTO users (username, email, password, role, full_name)
-      VALUES (
-          'testuser',
-          'test@celebrityconnect.com',
-          '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-          'user',
-          'Test User'
-      ) ON CONFLICT (username) DO NOTHING;
+      SELECT 'testuser', 'test@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'user', 'Test User'
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'testuser');
 
-      -- Insert sample celebrities
+      -- Insert sample celebrities - ONLY if they don't exist
       INSERT INTO users (username, email, password, role, full_name)
-      VALUES
-          ('tomhanks', 'tom@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Tom Hanks'),
-          ('oprah', 'oprah@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Oprah Winfrey'),
-          ('therock', 'rock@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Dwayne Johnson'),
-          ('taylorswift', 'taylor@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Taylor Swift')
-      ON CONFLICT (username) DO NOTHING;
+      SELECT 'tomhanks', 'tom@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Tom Hanks'
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'tomhanks');
+
+      INSERT INTO users (username, email, password, role, full_name)
+      SELECT 'oprah', 'oprah@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Oprah Winfrey'
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'oprah');
+
+      INSERT INTO users (username, email, password, role, full_name)
+      SELECT 'therock', 'rock@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Dwayne Johnson'
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'therock');
+
+      INSERT INTO users (username, email, password, role, full_name)
+      SELECT 'taylorswift', 'taylor@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Taylor Swift'
+      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'taylorswift');
 
       -- Insert celebrity profiles
       INSERT INTO celebrities (user_id, name, bio, category, profile_image, available_for_booking)
@@ -185,7 +183,7 @@ router.get('/database', async (req, res) => {
   }
 });
 
-// Check database status
+// Check database status and existing data
 router.get('/status', async (req, res) => {
   try {
     const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
@@ -195,7 +193,13 @@ router.get('/status', async (req, res) => {
       WHERE table_schema = 'public'
     `);
 
-    const usersResult = await client.query('SELECT username, email, role FROM users ORDER BY created_at');
+    const usersResult = await client.query('SELECT username, email, role, created_at FROM users ORDER BY created_at');
+    const celebritiesResult = await client.query(`
+      SELECT c.name, c.category, c.available_for_booking, u.username, c.created_at
+      FROM celebrities c
+      JOIN users u ON c.user_id = u.id
+      ORDER BY c.created_at
+    `);
 
     res.json({
       database_connected: true,
@@ -203,6 +207,14 @@ router.get('/status', async (req, res) => {
       postgres_version: result.rows[0].postgres_version,
       tables_count: parseInt(tablesResult.rows[0].table_count),
       users: usersResult.rows,
+      celebrities: celebritiesResult.rows,
+      summary: {
+        total_users: usersResult.rows.length,
+        total_celebrities: celebritiesResult.rows.length,
+        admins: usersResult.rows.filter(u => u.role === 'admin').length,
+        regular_users: usersResult.rows.filter(u => u.role === 'user').length,
+        celebrity_users: usersResult.rows.filter(u => u.role === 'celebrity').length
+      },
       message: 'Database is connected and ready!'
     });
   } catch (error) {
