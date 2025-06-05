@@ -105,6 +105,48 @@ router.get('/database', async (req, res) => {
           'user',
           'Test User'
       ) ON CONFLICT (username) DO NOTHING;
+
+      -- Insert sample celebrities
+      INSERT INTO users (username, email, password, role, full_name)
+      VALUES
+          ('tomhanks', 'tom@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Tom Hanks'),
+          ('oprah', 'oprah@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Oprah Winfrey'),
+          ('therock', 'rock@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Dwayne Johnson'),
+          ('taylorswift', 'taylor@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'celebrity', 'Taylor Swift')
+      ON CONFLICT (username) DO NOTHING;
+
+      -- Insert celebrity profiles
+      INSERT INTO celebrities (user_id, name, bio, category, profile_image, available_for_booking)
+      SELECT
+          u.id,
+          CASE
+              WHEN u.username = 'tomhanks' THEN 'Tom Hanks'
+              WHEN u.username = 'oprah' THEN 'Oprah Winfrey'
+              WHEN u.username = 'therock' THEN 'Dwayne Johnson'
+              WHEN u.username = 'taylorswift' THEN 'Taylor Swift'
+          END,
+          CASE
+              WHEN u.username = 'tomhanks' THEN 'Academy Award-winning actor known for Forrest Gump, Cast Away, and Toy Story.'
+              WHEN u.username = 'oprah' THEN 'Media mogul, talk show host, and philanthropist inspiring millions worldwide.'
+              WHEN u.username = 'therock' THEN 'Actor, producer, and former professional wrestler. Known for Fast & Furious and Jumanji.'
+              WHEN u.username = 'taylorswift' THEN 'Grammy Award-winning singer-songwriter and global music icon.'
+          END,
+          CASE
+              WHEN u.username = 'tomhanks' THEN 'Actor'
+              WHEN u.username = 'oprah' THEN 'Media Personality'
+              WHEN u.username = 'therock' THEN 'Actor'
+              WHEN u.username = 'taylorswift' THEN 'Musician'
+          END,
+          CASE
+              WHEN u.username = 'tomhanks' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Tom_Hanks_TIFF_2019.jpg/400px-Tom_Hanks_TIFF_2019.jpg'
+              WHEN u.username = 'oprah' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Oprah_in_2014.jpg/400px-Oprah_in_2014.jpg'
+              WHEN u.username = 'therock' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Dwayne_Johnson_2014_%28cropped%29.jpg/400px-Dwayne_Johnson_2014_%28cropped%29.jpg'
+              WHEN u.username = 'taylorswift' THEN 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_4.png/400px-Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_4.png'
+          END,
+          true
+      FROM users u
+      WHERE u.username IN ('tomhanks', 'oprah', 'therock', 'taylorswift')
+      ON CONFLICT DO NOTHING;
     `;
 
     await client.query(createTablesSQL);

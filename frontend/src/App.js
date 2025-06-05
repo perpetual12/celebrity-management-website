@@ -31,6 +31,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import TMDbSetup from './pages/TMDbSetup';
 import TestCelebrities from './pages/TestCelebrities';
+import NotFound from './pages/NotFound';
 
 
 // Set up axios defaults for production
@@ -144,20 +145,8 @@ function App() {
       }
     };
 
-    // Only check auth status if we're not on public pages
-    const currentPath = window.location.pathname;
-    const publicPaths = ['/login', '/register', '/admin-login', '/', '/celebrities', '/help', '/contact', '/privacy', '/terms'];
-
-    if (!publicPaths.some(path => currentPath.startsWith(path))) {
-      console.log('🔍 Checking auth status for protected route:', currentPath);
-      // Add a small delay to allow session to be established
-      setTimeout(() => {
-        checkAuthStatus();
-      }, 100);
-    } else {
-      console.log('📍 On public page, skipping auth check:', currentPath);
-      setLoading(false);
-    }
+    // Always check auth status, but don't fail on public pages
+    checkAuthStatus();
   }, []);
 
   if (loading) {
@@ -262,6 +251,8 @@ function App() {
               )
             } />
 
+            {/* 404 Not Found - Must be last route */}
+            <Route path="*" element={<NotFound />} />
 
           </Routes>
         </div>
