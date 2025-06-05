@@ -145,6 +145,19 @@ router.get('/database', async (req, res) => {
       FROM users u
       WHERE u.username IN ('tomhanks', 'oprah', 'therock', 'taylorswift')
         AND NOT EXISTS (SELECT 1 FROM celebrities WHERE user_id = u.id);
+
+      -- Create sample notifications for testuser
+      INSERT INTO notifications (user_id, type, title, message, is_read, created_at)
+      SELECT
+          u.id,
+          'welcome',
+          'Welcome to Celebrity Connect!',
+          'Thank you for joining Celebrity Connect! Start exploring celebrities and book your first appointment.',
+          false,
+          CURRENT_TIMESTAMP
+      FROM users u
+      WHERE u.username = 'testuser'
+        AND NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = u.id AND type = 'welcome');
     `;
 
     await client.query(createTablesSQL);
@@ -463,6 +476,91 @@ router.post('/repair-database', async (req, res) => {
       success: false,
       error: error.message,
       message: 'Failed to repair database'
+    });
+  }
+});
+
+// Debug database connection
+router.get('/database-info', async (req, res) => {
+  try {
+    // Get database connection info
+    const dbInfo = await client.query(`
+      SELECT
+        current_database() as database_name,
+        current_user as current_user,
+        inet_server_addr() as server_address,
+        inet_server_port() as server_port,
+        version() as postgres_version
+    `);
+
+    // Get environment info
+    const envInfo = {
+      NODE_ENV: process.env.NODE_ENV,
+      DATABASE_URL_EXISTS: !!process.env.DATABASE_URL,
+      DATABASE_URL_PREVIEW: process.env.DATABASE_URL ?
+        process.env.DATABASE_URL.substring(0, 20) + '...' + process.env.DATABASE_URL.slice(-20) :
+        'Not set',
+      DB_HOST: process.env.DB_HOST || 'Not set',
+      DB_NAME: process.env.DB_NAME || 'Not set',
+      DB_PORT: process.env.DB_PORT || 'Not set',
+      DB_USERNAME: process.env.DB_USERNAME || 'Not set'
+    };
+
+    res.json({
+      success: true,
+      database_info: dbInfo.rows[0],
+      environment_info: envInfo,
+      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL (Render Managed)' : 'Individual Environment Variables',
+      message: 'Database connection information retrieved successfully',
+      instructions: {
+        current_database: dbInfo.rows[0].database_name,
+        pgadmin_connection: 'To connect PgAdmin to this database, use the connection details shown above',
+        data_sync: 'If you want to use your existing PgAdmin database, update the DATABASE_URL environment variable in Render'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting database info:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to get database information'
+    });
+  }
+});
+
+// Migrate data from external database (if needed)
+router.post('/migrate-external-data', async (req, res) => {
+  try {
+    const { externalDatabaseUrl } = req.body;
+
+    if (!externalDatabaseUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'External database URL is required'
+      });
+    }
+
+    // This would require implementing a data migration script
+    // For now, just return instructions
+    res.json({
+      success: false,
+      message: 'Data migration feature not implemented yet',
+      instructions: [
+        '1. Export your data from PgAdmin as SQL dump',
+        '2. Import the SQL dump into the current database',
+        '3. Or update DATABASE_URL in Render to point to your PgAdmin database',
+        '4. Make sure your PgAdmin database is accessible from the internet'
+      ],
+      current_database_info: 'Use /api/setup/database-info to see current database details'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in migration:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to migrate data'
     });
   }
 });

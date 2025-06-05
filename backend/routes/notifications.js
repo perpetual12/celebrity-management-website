@@ -14,14 +14,18 @@ const isAuthenticated = (req, res, next) => {
 // Get all notifications for the current user
 router.get('/my-notifications', isAuthenticated, async (req, res) => {
   try {
+    console.log('🔔 Fetching notifications for user:', req.user.id, req.user.username);
+
     const result = await client.query(`
-      SELECT 
+      SELECT
         id, type, title, message, is_read, created_at, updated_at,
         related_appointment_id, related_message_id
-      FROM notifications 
-      WHERE user_id = $1 
+      FROM notifications
+      WHERE user_id = $1
       ORDER BY created_at DESC
     `, [req.user.id]);
+
+    console.log(`🔔 Found ${result.rows.length} notifications for user ${req.user.username}`);
 
     const notifications = result.rows.map(row => ({
       id: row.id,
@@ -37,6 +41,14 @@ router.get('/my-notifications', isAuthenticated, async (req, res) => {
 
     res.json(notifications);
   } catch (err) {
+    console.error('❌ Error fetching notifications:', err);
+
+    // If table doesn't exist, return empty array
+    if (err.message.includes('relation "notifications" does not exist')) {
+      console.log('⚠️ Notifications table does not exist, returning empty array');
+      return res.json([]);
+    }
+
     res.status(500).json({ error: err.message });
   }
 });
