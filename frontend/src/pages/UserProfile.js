@@ -12,7 +12,7 @@ const UserProfile = ({ user, setUser }) => {
     bio: user?.bio || ''
   });
   const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(user?.profile_image ? `http://localhost:5001${user.profile_image}` : null);
+  const [previewUrl, setPreviewUrl] = useState(user?.profile_image ? `${process.env.REACT_APP_API_URL || ''}${user.profile_image}` : null);
   const [appointments, setAppointments] = useState([]);
   const [messages, setMessages] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -32,27 +32,52 @@ const UserProfile = ({ user, setUser }) => {
 
   const fetchUserData = async () => {
     setLoading(true);
+    console.log('👤 Fetching user profile data...');
+
     try {
       // Fetch appointments
-      const appointmentsRes = await axios.get('/api/appointments/my-appointments', {
-        withCredentials: true
-      });
-      setAppointments(appointmentsRes.data);
+      try {
+        console.log('📅 Fetching appointments...');
+        const appointmentsRes = await axios.get('/api/appointments/my-appointments', {
+          withCredentials: true
+        });
+        console.log('📅 Appointments response:', appointmentsRes.data);
+        setAppointments(appointmentsRes.data);
+      } catch (appointmentsErr) {
+        console.error('❌ Error fetching appointments:', appointmentsErr);
+        setAppointments([]); // Set empty array instead of failing
+      }
 
       // Fetch messages
-      const messagesRes = await axios.get('/api/messages/my-messages', {
-        withCredentials: true
-      });
-      setMessages(messagesRes.data);
+      try {
+        console.log('💬 Fetching messages...');
+        const messagesRes = await axios.get('/api/messages/my-messages', {
+          withCredentials: true
+        });
+        console.log('💬 Messages response:', messagesRes.data);
+        setMessages(messagesRes.data);
+      } catch (messagesErr) {
+        console.error('❌ Error fetching messages:', messagesErr);
+        setMessages([]); // Set empty array instead of failing
+      }
 
       // Fetch notifications
-      const notificationsRes = await axios.get('/api/notifications/my-notifications', {
-        withCredentials: true
-      });
-      setNotifications(notificationsRes.data);
+      try {
+        console.log('🔔 Fetching notifications...');
+        const notificationsRes = await axios.get('/api/notifications/my-notifications', {
+          withCredentials: true
+        });
+        console.log('🔔 Notifications response:', notificationsRes.data);
+        setNotifications(notificationsRes.data);
+      } catch (notificationsErr) {
+        console.error('❌ Error fetching notifications:', notificationsErr);
+        setNotifications([]); // Set empty array instead of failing
+      }
+
+      console.log('✅ User profile data fetch completed');
     } catch (err) {
-      setError('Failed to fetch user data');
-      console.error('Error fetching user data:', err);
+      console.error('❌ Error fetching user data:', err);
+      setError(`Failed to fetch user data: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
     }
@@ -89,7 +114,7 @@ const UserProfile = ({ user, setUser }) => {
 
       // Update preview URL if new image was uploaded
       if (selectedFile) {
-        setPreviewUrl(`http://localhost:5001${response.data.user.profile_image}`);
+        setPreviewUrl(`${process.env.REACT_APP_API_URL || ''}${response.data.user.profile_image}`);
         setSelectedFile(null);
       }
 
@@ -193,7 +218,7 @@ const UserProfile = ({ user, setUser }) => {
           <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
             {user.profile_image ? (
               <img
-                src={`http://localhost:5001${user.profile_image}`}
+                src={`${process.env.REACT_APP_API_URL || ''}${user.profile_image}`}
                 alt={user.username}
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-white mx-auto sm:mx-0"
               />

@@ -366,4 +366,105 @@ router.post('/add-sample-data', async (req, res) => {
   }
 });
 
+// Repair existing database data
+router.post('/repair-database', async (req, res) => {
+  try {
+    console.log('🔧 Repairing existing database data...');
+    const repairs = [];
+
+    // 0. Add missing columns if they don't exist
+    try {
+      await client.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'bio') THEN
+            ALTER TABLE users ADD COLUMN bio TEXT;
+          END IF;
+        END $$;
+      `);
+      repairs.push('Ensured bio column exists in users table');
+    } catch (err) {
+      console.log('Bio column already exists or error:', err.message);
+    }
+
+    // 1. Fix missing full_name in users table
+    const usersWithoutFullName = await client.query(`
+      UPDATE users
+      SET full_name = COALESCE(full_name, username)
+      WHERE full_name IS NULL OR full_name = ''
+      RETURNING username, full_name
+    `);
+    if (usersWithoutFullName.rows.length > 0) {
+      repairs.push(`Fixed ${usersWithoutFullName.rows.length} users missing full_name`);
+    }
+
+    // 2. Ensure all celebrity users have celebrity profiles
+    const celebrityUsersWithoutProfiles = await client.query(`
+      SELECT u.id, u.username, u.full_name
+      FROM users u
+      WHERE u.role = 'celebrity'
+      AND NOT EXISTS (SELECT 1 FROM celebrities c WHERE c.user_id = u.id)
+    `);
+
+    for (const user of celebrityUsersWithoutProfiles.rows) {
+      await client.query(`
+        INSERT INTO celebrities (user_id, name, bio, category, available_for_booking)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [
+        user.id,
+        user.full_name || user.username,
+        `Celebrity profile for ${user.full_name || user.username}`,
+        'Entertainment',
+        true
+      ]);
+      repairs.push(`Created celebrity profile for ${user.username}`);
+    }
+
+    // 3. Fix any celebrities without proper user relationships
+    const orphanedCelebrities = await client.query(`
+      SELECT c.id, c.name
+      FROM celebrities c
+      WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = c.user_id)
+    `);
+    if (orphanedCelebrities.rows.length > 0) {
+      await client.query(`DELETE FROM celebrities WHERE id = ANY($1)`,
+        [orphanedCelebrities.rows.map(c => c.id)]);
+      repairs.push(`Removed ${orphanedCelebrities.rows.length} orphaned celebrity profiles`);
+    }
+
+    // 4. Ensure admin user exists
+    const adminExists = await client.query(`SELECT id FROM users WHERE username = 'admin'`);
+    if (adminExists.rows.length === 0) {
+      await client.query(`
+        INSERT INTO users (username, email, password, role, full_name)
+        VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator')
+      `);
+      repairs.push('Created missing admin user');
+    }
+
+    // 5. Update any users with role 'celebrity' to ensure they have proper setup
+    await client.query(`
+      UPDATE users
+      SET role = 'celebrity'
+      WHERE id IN (SELECT user_id FROM celebrities)
+      AND role != 'celebrity'
+    `);
+
+    res.json({
+      success: true,
+      message: 'Database repair completed',
+      repairs: repairs,
+      repair_count: repairs.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error repairing database:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to repair database'
+    });
+  }
+});
+
 export default router;
