@@ -87,10 +87,13 @@ router.get('/database', async (req, res) => {
       CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON messages(receiver_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
-      -- Insert default admin user (password: admin123) - ONLY if not exists
+      -- Insert default admin user (password: admin123) - ALWAYS ensure admin exists
       INSERT INTO users (username, email, password, role, full_name)
-      SELECT 'admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator'
-      WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
+      VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator')
+      ON CONFLICT (username) DO UPDATE SET
+        password = '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
+        role = 'admin',
+        full_name = 'System Administrator';
 
       -- Insert test user (password: test123) - ONLY if not exists
       INSERT INTO users (username, email, password, role, full_name)
@@ -643,6 +646,138 @@ router.post('/test-connection', async (req, res) => {
       success: false,
       error: error.message,
       message: 'Failed to test database connection'
+    });
+  }
+});
+
+// Create or reset admin user
+router.post('/create-admin', async (req, res) => {
+  try {
+    console.log('👑 Creating/resetting admin user...');
+
+    // Create or update admin user
+    const result = await client.query(`
+      INSERT INTO users (username, email, password, role, full_name)
+      VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator')
+      ON CONFLICT (username) DO UPDATE SET
+        password = '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
+        role = 'admin',
+        full_name = 'System Administrator',
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id, username, email, role, full_name, created_at
+    `);
+
+    const adminUser = result.rows[0];
+    console.log('✅ Admin user created/updated:', adminUser.username);
+
+    res.json({
+      success: true,
+      message: 'Admin user created/updated successfully',
+      admin: {
+        id: adminUser.id,
+        username: adminUser.username,
+        email: adminUser.email,
+        role: adminUser.role,
+        full_name: adminUser.full_name,
+        created_at: adminUser.created_at
+      },
+      credentials: {
+        username: 'admin',
+        password: 'admin123',
+        note: 'Use these credentials to login to admin panel'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating admin user:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to create admin user'
+    });
+  }
+});
+
+// Quick setup endpoint - creates everything needed
+router.post('/quick-setup', async (req, res) => {
+  try {
+    console.log('🚀 Running quick setup...');
+    const results = [];
+
+    // 1. Create tables
+    try {
+      await client.query(`
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+        CREATE TABLE IF NOT EXISTS users (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          username VARCHAR(50) UNIQUE NOT NULL,
+          email VARCHAR(100) UNIQUE NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'celebrity', 'admin')),
+          full_name VARCHAR(100),
+          profile_image VARCHAR(500),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      results.push('✅ Users table created');
+    } catch (err) {
+      results.push(`⚠️ Users table: ${err.message}`);
+    }
+
+    // 2. Create admin user
+    try {
+      const adminResult = await client.query(`
+        INSERT INTO users (username, email, password, role, full_name)
+        VALUES ('admin', 'admin@celebrityconnect.com', '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi', 'admin', 'System Administrator')
+        ON CONFLICT (username) DO UPDATE SET
+          password = '$2b$10$8K1p/a0dclxKoNqIfrHb4.FRCdmHlS02koEGjwQzjIhFJXMJW3aMi',
+          role = 'admin'
+        RETURNING username
+      `);
+      results.push(`✅ Admin user: ${adminResult.rows[0].username}`);
+    } catch (err) {
+      results.push(`❌ Admin user: ${err.message}`);
+    }
+
+    // 3. Create test user
+    try {
+      const testResult = await client.query(`
+        INSERT INTO users (username, email, password, role, full_name)
+        VALUES ('testuser', 'test@celebrityconnect.com', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'user', 'Test User')
+        ON CONFLICT (username) DO NOTHING
+        RETURNING username
+      `);
+      if (testResult.rows.length > 0) {
+        results.push(`✅ Test user: ${testResult.rows[0].username}`);
+      } else {
+        results.push('⏭️ Test user already exists');
+      }
+    } catch (err) {
+      results.push(`❌ Test user: ${err.message}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'Quick setup completed',
+      results: results,
+      admin_credentials: {
+        username: 'admin',
+        password: 'admin123'
+      },
+      test_credentials: {
+        username: 'testuser',
+        password: 'test123'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Quick setup failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Quick setup failed'
     });
   }
 });
