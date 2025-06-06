@@ -5,9 +5,9 @@ import { sqliteClient, initSQLiteDB } from './sqlite-database.js';
 const { Client } = pkg;
 dotenv.config();
 
-// Use SQLite as fallback when PostgreSQL fails
-const USE_SQLITE = process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL;
-console.log('🔧 Database mode:', USE_SQLITE ? 'SQLite' : 'PostgreSQL');
+// Use in-memory database as fallback when PostgreSQL fails
+const USE_FALLBACK = process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL;
+console.log('🔧 Database mode:', USE_FALLBACK ? 'In-Memory Fallback' : 'PostgreSQL');
 
 // Database configuration for production (Render) and development
 const getDatabaseConfig = () => {
@@ -57,57 +57,65 @@ const getDatabaseConfig = () => {
 // Create client based on database mode
 let client;
 
-if (USE_SQLITE) {
-  console.log('🔧 Using SQLite database');
+if (USE_FALLBACK) {
+  console.log('🔧 Using in-memory fallback database');
   client = sqliteClient;
 
-  // Initialize SQLite database
+  // Initialize fallback database
   try {
     await initSQLiteDB();
-    console.log('✅ SQLite database initialized successfully');
+    console.log('✅ Fallback database initialized successfully');
   } catch (error) {
-    console.error('❌ SQLite initialization failed:', error);
+    console.error('❌ Fallback database initialization failed:', error);
+    console.log('📝 Continuing with basic in-memory storage');
   }
 } else {
   console.log('🔧 Using PostgreSQL database');
-  client = new Client(getDatabaseConfig());
 
-  // Connect to PostgreSQL with retry logic
-  const connectWithRetry = async (retries = 3) => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        console.log(`🔄 Attempting PostgreSQL connection (attempt ${i + 1}/${retries})...`);
-        await client.connect();
-        console.log('✅ Connected to PostgreSQL database successfully!');
+  try {
+    client = new Client(getDatabaseConfig());
 
-        // Test the connection
-        const result = await client.query('SELECT NOW() as current_time, current_database() as db_name');
-        console.log(`📊 Connected to database: ${result.rows[0].db_name}`);
-        console.log(`⏰ Server time: ${result.rows[0].current_time}`);
+    // Connect to PostgreSQL with retry logic
+    const connectWithRetry = async (retries = 2) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          console.log(`🔄 Attempting PostgreSQL connection (attempt ${i + 1}/${retries})...`);
+          await client.connect();
+          console.log('✅ Connected to PostgreSQL database successfully!');
 
-        return true;
-      } catch (error) {
-        console.error(`❌ PostgreSQL connection attempt ${i + 1} failed:`, error.message);
+          // Test the connection
+          const result = await client.query('SELECT NOW() as current_time');
+          console.log(`⏰ Server time: ${result.rows[0].current_time}`);
 
-        if (i === retries - 1) {
-          console.error('🚨 All PostgreSQL connection attempts failed!');
-          console.error('🔄 Falling back to SQLite...');
-
-          // Fallback to SQLite
-          client = sqliteClient;
-          await initSQLiteDB();
-          console.log('✅ Fallback to SQLite successful');
           return true;
+        } catch (error) {
+          console.error(`❌ PostgreSQL connection attempt ${i + 1} failed:`, error.message);
+
+          if (i === retries - 1) {
+            console.error('🚨 PostgreSQL connection failed, falling back to in-memory database');
+
+            // Fallback to in-memory
+            client = sqliteClient;
+            await initSQLiteDB();
+            console.log('✅ Fallback to in-memory database successful');
+            return true;
+          }
+
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, 2000));
       }
-    }
-  };
+    };
 
-  // Attempt PostgreSQL connection
-  await connectWithRetry();
+    // Attempt PostgreSQL connection
+    await connectWithRetry();
+
+  } catch (error) {
+    console.error('❌ Failed to create PostgreSQL client, using fallback:', error.message);
+    client = sqliteClient;
+    await initSQLiteDB();
+    console.log('✅ Using in-memory fallback database');
+  }
 }
 
 export default client;
