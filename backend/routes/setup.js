@@ -582,26 +582,45 @@ router.post('/migrate-external-data', async (req, res) => {
 // Health check endpoint
 router.get('/health', async (req, res) => {
   try {
-    // Test database connection
-    const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
+    console.log('🔍 Health check: Testing database connection...');
+
+    // Test database connection with simpler query
+    const result = await client.query('SELECT NOW() as current_time');
+
+    console.log('✅ Health check: Database query successful');
+    console.log('   - Current time:', result.rows[0]?.current_time);
+
+    // Determine database type
+    const isInMemory = process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL;
+    const dbType = isInMemory ? 'In-Memory Database' : 'PostgreSQL';
 
     res.json({
       status: 'healthy',
       database: 'connected',
-      timestamp: result.rows[0].current_time,
-      postgres_version: result.rows[0].postgres_version,
+      database_type: dbType,
+      timestamp: result.rows[0]?.current_time || new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL' : 'Environment Variables'
+      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL' : 'In-Memory Fallback',
+      server_time: new Date().toISOString()
     });
   } catch (error) {
     console.error('❌ Health check failed:', error);
+    console.error('   - Error message:', error.message);
+    console.error('   - Error code:', error.code);
+
     res.status(500).json({
       status: 'unhealthy',
       database: 'disconnected',
       error: error.message,
+      error_code: error.code,
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL' : 'Environment Variables'
+      connection_type: process.env.DATABASE_URL ? 'DATABASE_URL' : 'In-Memory Fallback',
+      suggestions: [
+        'Check database connection',
+        'Verify environment variables',
+        'Check server logs for details'
+      ]
     });
   }
 });
@@ -1250,14 +1269,14 @@ router.get('/test-db-connection', async (req, res) => {
   try {
     console.log('🔍 Testing database connection...');
 
-    // Test basic connection
+    // Test basic connection with simpler query
     const startTime = Date.now();
-    const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
+    const result = await client.query('SELECT NOW() as current_time');
     const connectionTime = Date.now() - startTime;
 
     console.log('✅ Database connection successful');
     console.log('   - Connection time:', connectionTime + 'ms');
-    console.log('   - PostgreSQL version:', result.rows[0].postgres_version);
+    console.log('   - Current time:', result.rows[0]?.current_time);
 
     // Test if tables exist
     const tablesResult = await client.query(`
@@ -1287,8 +1306,8 @@ router.get('/test-db-connection', async (req, res) => {
       connection: {
         status: 'connected',
         time_ms: connectionTime,
-        postgres_version: result.rows[0].postgres_version,
-        current_time: result.rows[0].current_time
+        database_type: process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL ? 'In-Memory' : 'PostgreSQL',
+        current_time: result.rows[0]?.current_time || new Date().toISOString()
       },
       database: {
         tables_found: tables,
@@ -1335,6 +1354,22 @@ router.get('/test-db-connection', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
+});
+
+// Simple health check without database dependency
+router.get('/simple-health', (req, res) => {
+  console.log('🔍 Simple health check (no database)');
+
+  res.json({
+    status: 'healthy',
+    server: 'running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    database_mode: process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL ? 'In-Memory' : 'PostgreSQL',
+    uptime: process.uptime(),
+    memory_usage: process.memoryUsage(),
+    version: '1.0.0'
+  });
 });
 
 export default router;
