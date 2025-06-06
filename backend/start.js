@@ -11,9 +11,12 @@ console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔌 Port:', process.env.PORT || '5001');
 console.log('🔗 Database URL provided:', !!process.env.DATABASE_URL);
 
-// Validate required environment variables
-const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET'];
+// Validate required environment variables (DATABASE_URL is optional with fallback)
+const requiredEnvVars = ['SESSION_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+// Check if we're using SQLite fallback
+const usingSQLiteFallback = process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL;
 
 if (missingEnvVars.length > 0) {
   console.error('❌ Missing required environment variables:');
@@ -22,6 +25,13 @@ if (missingEnvVars.length > 0) {
   });
   console.error('🔧 Please set these environment variables in Render dashboard');
   process.exit(1);
+}
+
+// Log database mode
+if (usingSQLiteFallback) {
+  console.log('📝 Using in-memory database (DATABASE_URL not required)');
+} else {
+  console.log('🔗 Using PostgreSQL database');
 }
 
 console.log('✅ All required environment variables are set');
