@@ -19,33 +19,94 @@ let db = null;
 let inMemoryData = {
   users: [
     {
-      id: 'admin-id',
+      id: 'admin-id-123',
       username: 'admin',
       email: 'admin@celebrityconnect.com',
       password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
       role: 'admin',
       full_name: 'System Administrator',
-      created_at: new Date().toISOString()
+      profile_image: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     },
     {
-      id: 'test-user-id',
+      id: 'test-user-id-456',
       username: 'testuser',
       email: 'test@celebrityconnect.com',
       password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
       role: 'user',
       full_name: 'Test User',
-      created_at: new Date().toISOString()
+      profile_image: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: 'celeb-user-1',
+      username: 'tomhanks',
+      email: 'tomhanks@celebrityconnect.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+      role: 'celebrity',
+      full_name: 'Tom Hanks',
+      profile_image: 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Tom_Hanks_TIFF_2019.jpg',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: 'celeb-user-2',
+      username: 'taylorswift',
+      email: 'taylorswift@celebrityconnect.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+      role: 'celebrity',
+      full_name: 'Taylor Swift',
+      profile_image: 'https://upload.wikimedia.org/wikipedia/commons/b/b5/191125_Taylor_Swift_at_the_2019_American_Music_Awards_%28cropped%29.png',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: 'celeb-user-3',
+      username: 'oprahwinfrey',
+      email: 'oprahwinfrey@celebrityconnect.com',
+      password: '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+      role: 'celebrity',
+      full_name: 'Oprah Winfrey',
+      profile_image: 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Oprah_in_2014.jpg',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   ],
   celebrities: [
     {
       id: 'celeb-1',
-      user_id: 'admin-id',
+      user_id: 'celeb-user-1',
       name: 'Tom Hanks',
-      bio: 'Academy Award-winning actor',
+      bio: 'Academy Award-winning actor known for Forrest Gump, Cast Away, and Toy Story.',
       category: 'Actor',
+      profile_image: 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Tom_Hanks_TIFF_2019.jpg',
       available_for_booking: true,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: 'celeb-2',
+      user_id: 'celeb-user-2',
+      name: 'Taylor Swift',
+      bio: 'Grammy Award-winning singer-songwriter and global superstar.',
+      category: 'Musician',
+      profile_image: 'https://upload.wikimedia.org/wikipedia/commons/b/b5/191125_Taylor_Swift_at_the_2019_American_Music_Awards_%28cropped%29.png',
+      available_for_booking: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: 'celeb-3',
+      user_id: 'celeb-user-3',
+      name: 'Oprah Winfrey',
+      bio: 'Media mogul, philanthropist, and influential talk show host.',
+      category: 'TV Host',
+      profile_image: 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Oprah_in_2014.jpg',
+      available_for_booking: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   ],
   appointments: [],
@@ -53,12 +114,15 @@ let inMemoryData = {
   notifications: [
     {
       id: 'notif-1',
-      user_id: 'test-user-id',
+      user_id: 'test-user-id-456',
       type: 'welcome',
       title: 'Welcome to Celebrity Connect! 🌟',
-      message: 'Welcome to Celebrity Connect! We\'re thrilled to have you join our platform.',
+      message: 'Welcome to Celebrity Connect! We\'re thrilled to have you join our platform where you can connect with your favorite celebrities.',
       is_read: false,
-      created_at: new Date().toISOString()
+      related_appointment_id: null,
+      related_message_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   ]
 };
@@ -262,29 +326,61 @@ async function queryInMemory(text, params) {
     return { rows: tables.map(name => ({ table_name: name })) };
   }
 
-  // Simple in-memory query handling
+  // Enhanced in-memory query handling
   if (text.includes('SELECT') && text.includes('users')) {
     if (text.includes('WHERE username')) {
       const username = params[0];
       const user = inMemoryData.users.find(u => u.username === username);
+      console.log(`📝 User lookup for username '${username}':`, user ? 'Found' : 'Not found');
       return { rows: user ? [user] : [] };
     } else if (text.includes('WHERE role')) {
       const role = params[0];
       const users = inMemoryData.users.filter(u => u.role === role);
+      console.log(`📝 Users with role '${role}':`, users.length);
       return { rows: users };
+    } else if (text.includes('WHERE id')) {
+      const userId = params[0];
+      const user = inMemoryData.users.find(u => u.id === userId);
+      return { rows: user ? [user] : [] };
     } else {
+      console.log('📝 Returning all users:', inMemoryData.users.length);
       return { rows: inMemoryData.users };
     }
   } else if (text.includes('SELECT') && text.includes('celebrities')) {
-    return { rows: inMemoryData.celebrities };
+    if (text.includes('WHERE id')) {
+      const celebId = params[0];
+      const celebrity = inMemoryData.celebrities.find(c => c.id === celebId);
+      return { rows: celebrity ? [celebrity] : [] };
+    } else if (text.includes('LIMIT')) {
+      // Handle LIMIT queries
+      const limitMatch = text.match(/LIMIT\s+(\d+)/i);
+      const limit = limitMatch ? parseInt(limitMatch[1]) : inMemoryData.celebrities.length;
+      return { rows: inMemoryData.celebrities.slice(0, limit) };
+    } else {
+      console.log('📝 Returning all celebrities:', inMemoryData.celebrities.length);
+      return { rows: inMemoryData.celebrities };
+    }
   } else if (text.includes('SELECT') && text.includes('appointments')) {
+    if (text.includes('WHERE user_id')) {
+      const userId = params[0];
+      const appointments = inMemoryData.appointments.filter(a => a.user_id === userId);
+      return { rows: appointments };
+    }
     return { rows: inMemoryData.appointments };
   } else if (text.includes('SELECT') && text.includes('messages')) {
+    if (text.includes('WHERE sender_id') || text.includes('WHERE receiver_id')) {
+      const userId = params[0];
+      const messages = inMemoryData.messages.filter(m =>
+        m.sender_id === userId || m.receiver_id === userId
+      );
+      return { rows: messages };
+    }
     return { rows: inMemoryData.messages };
   } else if (text.includes('SELECT') && text.includes('notifications')) {
     if (text.includes('WHERE user_id')) {
       const userId = params[0];
       const notifications = inMemoryData.notifications.filter(n => n.user_id === userId);
+      console.log(`📝 Notifications for user '${userId}':`, notifications.length);
       return { rows: notifications };
     }
     return { rows: inMemoryData.notifications };
@@ -296,9 +392,28 @@ async function queryInMemory(text, params) {
     // Handle basic inserts
     const table = getTableFromQuery(text);
     if (inMemoryData[table]) {
-      const newId = 'id-' + Date.now();
-      const newItem = { id: newId, created_at: new Date().toISOString() };
+      const newId = 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      const newItem = {
+        id: newId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Add specific fields based on table
+      if (table === 'users') {
+        newItem.role = 'user';
+        newItem.profile_image = null;
+      } else if (table === 'appointments') {
+        newItem.status = 'pending';
+      } else if (table === 'messages') {
+        newItem.is_read = false;
+      } else if (table === 'notifications') {
+        newItem.is_read = false;
+        newItem.type = 'general';
+      }
+
       inMemoryData[table].push(newItem);
+      console.log(`📝 Inserted new ${table} record:`, newId);
       return { rows: [newItem] };
     }
     return { rows: [] };

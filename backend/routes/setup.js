@@ -1372,4 +1372,53 @@ router.get('/simple-health', (req, res) => {
   });
 });
 
+// Debug endpoint to check in-memory data
+router.get('/debug-data', async (req, res) => {
+  try {
+    console.log('🔍 Debug: Checking in-memory data...');
+
+    // Get all users
+    const usersResult = await client.query('SELECT id, username, role, email, full_name FROM users');
+    console.log('📝 Users found:', usersResult.rows.length);
+
+    // Get all celebrities
+    const celebritiesResult = await client.query('SELECT id, name, category, available_for_booking FROM celebrities');
+    console.log('📝 Celebrities found:', celebritiesResult.rows.length);
+
+    // Get admin user specifically
+    const adminResult = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);
+    console.log('📝 Admin user found:', adminResult.rows.length > 0);
+
+    // Get test user specifically
+    const testResult = await client.query('SELECT * FROM users WHERE username = $1', ['testuser']);
+    console.log('📝 Test user found:', testResult.rows.length > 0);
+
+    res.json({
+      success: true,
+      data: {
+        users: {
+          total: usersResult.rows.length,
+          list: usersResult.rows
+        },
+        celebrities: {
+          total: celebritiesResult.rows.length,
+          list: celebritiesResult.rows
+        },
+        admin_user: adminResult.rows[0] || null,
+        test_user: testResult.rows[0] || null
+      },
+      database_type: process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL ? 'In-Memory' : 'PostgreSQL',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Debug data error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to get debug data'
+    });
+  }
+});
+
 export default router;
