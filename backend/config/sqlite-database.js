@@ -307,7 +307,8 @@ async function querySQLite(text, params) {
 
 // In-memory query handler
 async function queryInMemory(text, params) {
-  console.log('📝 In-memory query:', text.substring(0, 50) + '...');
+  console.log('📝 In-memory query:', text.substring(0, 100));
+  console.log('📝 Query params:', params);
 
   // Handle database connection test queries
   if (text.includes('NOW()') || text.includes('version()') || text.includes('current_time')) {
@@ -326,70 +327,105 @@ async function queryInMemory(text, params) {
     return { rows: tables.map(name => ({ table_name: name })) };
   }
 
-  // Enhanced in-memory query handling
-  if (text.includes('SELECT') && text.includes('users')) {
-    if (text.includes('WHERE username')) {
-      const username = params[0];
-      const user = inMemoryData.users.find(u => u.username === username);
-      console.log(`📝 User lookup for username '${username}':`, user ? 'Found' : 'Not found');
-      return { rows: user ? [user] : [] };
-    } else if (text.includes('WHERE role')) {
-      const role = params[0];
-      const users = inMemoryData.users.filter(u => u.role === role);
-      console.log(`📝 Users with role '${role}':`, users.length);
-      return { rows: users };
-    } else if (text.includes('WHERE id')) {
-      const userId = params[0];
-      const user = inMemoryData.users.find(u => u.id === userId);
-      return { rows: user ? [user] : [] };
-    } else {
-      console.log('📝 Returning all users:', inMemoryData.users.length);
-      return { rows: inMemoryData.users };
+  // Enhanced in-memory query handling with better pattern matching
+  const queryLower = text.toLowerCase();
+
+  // Handle SELECT queries
+  if (queryLower.includes('select')) {
+
+    // Users table queries
+    if (queryLower.includes('from users') || queryLower.includes('users where')) {
+      if (queryLower.includes('where username')) {
+        const username = params[0];
+        const user = inMemoryData.users.find(u => u.username === username);
+        console.log(`📝 User lookup for username '${username}':`, user ? 'Found' : 'Not found');
+        return { rows: user ? [user] : [] };
+      } else if (queryLower.includes('where role')) {
+        const role = params[0];
+        const users = inMemoryData.users.filter(u => u.role === role);
+        console.log(`📝 Users with role '${role}':`, users.length);
+        return { rows: users };
+      } else if (queryLower.includes('where id')) {
+        const userId = params[0];
+        const user = inMemoryData.users.find(u => u.id === userId);
+        return { rows: user ? [user] : [] };
+      } else {
+        console.log('📝 Returning all users:', inMemoryData.users.length);
+        return { rows: inMemoryData.users };
+      }
     }
-  } else if (text.includes('SELECT') && text.includes('celebrities')) {
-    if (text.includes('WHERE id')) {
-      const celebId = params[0];
-      const celebrity = inMemoryData.celebrities.find(c => c.id === celebId);
-      return { rows: celebrity ? [celebrity] : [] };
-    } else if (text.includes('LIMIT')) {
-      // Handle LIMIT queries
-      const limitMatch = text.match(/LIMIT\s+(\d+)/i);
-      const limit = limitMatch ? parseInt(limitMatch[1]) : inMemoryData.celebrities.length;
-      return { rows: inMemoryData.celebrities.slice(0, limit) };
-    } else {
-      console.log('📝 Returning all celebrities:', inMemoryData.celebrities.length);
-      return { rows: inMemoryData.celebrities };
+
+    // Celebrities table queries
+    else if (queryLower.includes('from celebrities') || queryLower.includes('celebrities where')) {
+      if (queryLower.includes('where id')) {
+        const celebId = params[0];
+        const celebrity = inMemoryData.celebrities.find(c => c.id === celebId);
+        console.log(`📝 Celebrity lookup for id '${celebId}':`, celebrity ? 'Found' : 'Not found');
+        return { rows: celebrity ? [celebrity] : [] };
+      } else if (queryLower.includes('limit')) {
+        // Handle LIMIT queries
+        const limitMatch = text.match(/limit\s+(\d+)/i);
+        const limit = limitMatch ? parseInt(limitMatch[1]) : inMemoryData.celebrities.length;
+        console.log(`📝 Returning ${limit} celebrities out of ${inMemoryData.celebrities.length}`);
+        return { rows: inMemoryData.celebrities.slice(0, limit) };
+      } else {
+        console.log('📝 Returning all celebrities:', inMemoryData.celebrities.length);
+        return { rows: inMemoryData.celebrities };
+      }
     }
-  } else if (text.includes('SELECT') && text.includes('appointments')) {
-    if (text.includes('WHERE user_id')) {
-      const userId = params[0];
-      const appointments = inMemoryData.appointments.filter(a => a.user_id === userId);
-      return { rows: appointments };
+
+    // Appointments table queries
+    else if (queryLower.includes('from appointments') || queryLower.includes('appointments where')) {
+      if (queryLower.includes('where user_id')) {
+        const userId = params[0];
+        const appointments = inMemoryData.appointments.filter(a => a.user_id === userId);
+        console.log(`📝 Appointments for user '${userId}':`, appointments.length);
+        return { rows: appointments };
+      } else {
+        console.log('📝 Returning all appointments:', inMemoryData.appointments.length);
+        return { rows: inMemoryData.appointments };
+      }
     }
-    return { rows: inMemoryData.appointments };
-  } else if (text.includes('SELECT') && text.includes('messages')) {
-    if (text.includes('WHERE sender_id') || text.includes('WHERE receiver_id')) {
-      const userId = params[0];
-      const messages = inMemoryData.messages.filter(m =>
-        m.sender_id === userId || m.receiver_id === userId
-      );
-      return { rows: messages };
+
+    // Messages table queries
+    else if (queryLower.includes('from messages') || queryLower.includes('messages where')) {
+      if (queryLower.includes('where sender_id') || queryLower.includes('where receiver_id')) {
+        const userId = params[0];
+        const messages = inMemoryData.messages.filter(m =>
+          m.sender_id === userId || m.receiver_id === userId
+        );
+        console.log(`📝 Messages for user '${userId}':`, messages.length);
+        return { rows: messages };
+      } else {
+        console.log('📝 Returning all messages:', inMemoryData.messages.length);
+        return { rows: inMemoryData.messages };
+      }
     }
-    return { rows: inMemoryData.messages };
-  } else if (text.includes('SELECT') && text.includes('notifications')) {
-    if (text.includes('WHERE user_id')) {
-      const userId = params[0];
-      const notifications = inMemoryData.notifications.filter(n => n.user_id === userId);
-      console.log(`📝 Notifications for user '${userId}':`, notifications.length);
-      return { rows: notifications };
+
+    // Notifications table queries
+    else if (queryLower.includes('from notifications') || queryLower.includes('notifications where')) {
+      if (queryLower.includes('where user_id')) {
+        const userId = params[0];
+        const notifications = inMemoryData.notifications.filter(n => n.user_id === userId);
+        console.log(`📝 Notifications for user '${userId}':`, notifications.length);
+        return { rows: notifications };
+      } else {
+        console.log('📝 Returning all notifications:', inMemoryData.notifications.length);
+        return { rows: inMemoryData.notifications };
+      }
     }
-    return { rows: inMemoryData.notifications };
-  } else if (text.includes('COUNT(*)')) {
-    const table = getTableFromQuery(text);
-    const count = inMemoryData[table] ? inMemoryData[table].length : 0;
-    return { rows: [{ count: count.toString() }] };
-  } else if (text.includes('INSERT')) {
-    // Handle basic inserts
+
+    // COUNT queries
+    else if (queryLower.includes('count(*)')) {
+      const table = getTableFromQuery(text);
+      const count = inMemoryData[table] ? inMemoryData[table].length : 0;
+      console.log(`📝 Count for table '${table}':`, count);
+      return { rows: [{ count: count.toString() }] };
+    }
+  }
+
+  // Handle INSERT queries
+  else if (queryLower.includes('insert')) {
     const table = getTableFromQuery(text);
     if (inMemoryData[table]) {
       const newId = 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);

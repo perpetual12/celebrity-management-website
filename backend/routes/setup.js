@@ -1421,4 +1421,87 @@ router.get('/debug-data', async (req, res) => {
   }
 });
 
+// Test all data fetching endpoints
+router.get('/test-data-fetching', async (req, res) => {
+  try {
+    console.log('🔍 Testing all data fetching...');
+    const results = {};
+
+    // Test users
+    try {
+      const usersResult = await client.query('SELECT * FROM users');
+      results.users = {
+        success: true,
+        count: usersResult.rows.length,
+        data: usersResult.rows
+      };
+    } catch (error) {
+      results.users = { success: false, error: error.message };
+    }
+
+    // Test celebrities
+    try {
+      const celebritiesResult = await client.query('SELECT * FROM celebrities');
+      results.celebrities = {
+        success: true,
+        count: celebritiesResult.rows.length,
+        data: celebritiesResult.rows
+      };
+    } catch (error) {
+      results.celebrities = { success: false, error: error.message };
+    }
+
+    // Test appointments
+    try {
+      const appointmentsResult = await client.query('SELECT * FROM appointments');
+      results.appointments = {
+        success: true,
+        count: appointmentsResult.rows.length,
+        data: appointmentsResult.rows
+      };
+    } catch (error) {
+      results.appointments = { success: false, error: error.message };
+    }
+
+    // Test messages
+    try {
+      const messagesResult = await client.query('SELECT * FROM messages');
+      results.messages = {
+        success: true,
+        count: messagesResult.rows.length,
+        data: messagesResult.rows
+      };
+    } catch (error) {
+      results.messages = { success: false, error: error.message };
+    }
+
+    // Test notifications
+    try {
+      const notificationsResult = await client.query('SELECT * FROM notifications');
+      results.notifications = {
+        success: true,
+        count: notificationsResult.rows.length,
+        data: notificationsResult.rows
+      };
+    } catch (error) {
+      results.notifications = { success: false, error: error.message };
+    }
+
+    res.json({
+      success: true,
+      message: 'Data fetching test completed',
+      results: results,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Data fetching test error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: 'Failed to test data fetching'
+    });
+  }
+});
+
 export default router;
