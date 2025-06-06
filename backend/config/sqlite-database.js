@@ -216,7 +216,9 @@ async function querySQLite(text, params) {
     .replace(/\$(\d+)/g, '?') // Replace $1, $2, etc. with ?
     .replace(/RETURNING \*/g, '') // Remove RETURNING clause
     .replace(/uuid_generate_v4\(\)/g, 'lower(hex(randomblob(16)))') // Replace UUID function
-    .replace(/CURRENT_TIMESTAMP/g, 'CURRENT_TIMESTAMP'); // Keep as is
+    .replace(/CURRENT_TIMESTAMP/g, 'CURRENT_TIMESTAMP') // Keep as is
+    .replace(/NOW\(\)/g, 'datetime("now")') // Replace NOW() with SQLite equivalent
+    .replace(/version\(\)/g, '"SQLite Database v1.0"'); // Replace version() function
 
   if (text.includes('INSERT') && text.includes('RETURNING')) {
     // Handle INSERT with RETURNING
@@ -242,6 +244,23 @@ async function querySQLite(text, params) {
 // In-memory query handler
 async function queryInMemory(text, params) {
   console.log('📝 In-memory query:', text.substring(0, 50) + '...');
+
+  // Handle database connection test queries
+  if (text.includes('NOW()') || text.includes('version()') || text.includes('current_time')) {
+    return {
+      rows: [{
+        current_time: new Date().toISOString(),
+        postgres_version: 'In-Memory Database v1.0',
+        db_name: 'celebrity_connect_memory'
+      }]
+    };
+  }
+
+  // Handle table existence checks
+  if (text.includes('information_schema.tables')) {
+    const tables = ['users', 'celebrities', 'appointments', 'messages', 'notifications'];
+    return { rows: tables.map(name => ({ table_name: name })) };
+  }
 
   // Simple in-memory query handling
   if (text.includes('SELECT') && text.includes('users')) {
@@ -269,8 +288,6 @@ async function queryInMemory(text, params) {
       return { rows: notifications };
     }
     return { rows: inMemoryData.notifications };
-  } else if (text.includes('SELECT NOW()')) {
-    return { rows: [{ current_time: new Date().toISOString(), postgres_version: 'In-Memory Database v1.0' }] };
   } else if (text.includes('COUNT(*)')) {
     const table = getTableFromQuery(text);
     const count = inMemoryData[table] ? inMemoryData[table].length : 0;
@@ -288,6 +305,7 @@ async function queryInMemory(text, params) {
   }
 
   // Default response for unhandled queries
+  console.log('⚠️ Unhandled query, returning empty result:', text.substring(0, 100));
   return { rows: [] };
 }
 
