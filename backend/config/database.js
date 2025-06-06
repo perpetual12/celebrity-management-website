@@ -1,8 +1,13 @@
 import pkg from 'pg';
 import dotenv from 'dotenv';
+import { sqliteClient, initSQLiteDB } from './sqlite-database.js';
 
 const { Client } = pkg;
 dotenv.config();
+
+// Use SQLite as fallback when PostgreSQL fails
+const USE_SQLITE = process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL;
+console.log('🔧 Database mode:', USE_SQLITE ? 'SQLite' : 'PostgreSQL');
 
 // Database configuration for production (Render) and development
 const getDatabaseConfig = () => {
@@ -49,47 +54,60 @@ const getDatabaseConfig = () => {
   };
 };
 
-const client = new Client(getDatabaseConfig());
+// Create client based on database mode
+let client;
 
-// Connect to the database with error handling and retry logic
-const connectWithRetry = async (retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      console.log(`🔄 Attempting database connection (attempt ${i + 1}/${retries})...`);
-      await client.connect();
-      console.log('✅ Connected to PostgreSQL database successfully!');
-      console.log(`🔗 Connection type: ${process.env.DATABASE_URL ? 'DATABASE_URL' : 'Individual environment variables'}`);
+if (USE_SQLITE) {
+  console.log('🔧 Using SQLite database');
+  client = sqliteClient;
 
-      // Test the connection
-      const result = await client.query('SELECT NOW() as current_time, current_database() as db_name');
-      console.log(`📊 Connected to database: ${result.rows[0].db_name}`);
-      console.log(`⏰ Server time: ${result.rows[0].current_time}`);
-
-      return true;
-    } catch (error) {
-      console.error(`❌ Database connection attempt ${i + 1} failed:`, error.message);
-
-      if (i === retries - 1) {
-        console.error('🚨 All database connection attempts failed!');
-        console.error('Database config used:', JSON.stringify(getDatabaseConfig(), null, 2));
-        console.error('Common issues:');
-        console.error('1. Database server not accessible from internet');
-        console.error('2. Incorrect host/port in DATABASE_URL');
-        console.error('3. Firewall blocking connection');
-        console.error('4. Database credentials incorrect');
-        console.error('5. SSL configuration mismatch');
-
-        // Don't throw error, let the app start but log the issue
-        return false;
-      }
-
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
+  // Initialize SQLite database
+  try {
+    await initSQLiteDB();
+    console.log('✅ SQLite database initialized successfully');
+  } catch (error) {
+    console.error('❌ SQLite initialization failed:', error);
   }
-};
+} else {
+  console.log('🔧 Using PostgreSQL database');
+  client = new Client(getDatabaseConfig());
 
-// Attempt connection
-const connected = await connectWithRetry();
+  // Connect to PostgreSQL with retry logic
+  const connectWithRetry = async (retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        console.log(`🔄 Attempting PostgreSQL connection (attempt ${i + 1}/${retries})...`);
+        await client.connect();
+        console.log('✅ Connected to PostgreSQL database successfully!');
+
+        // Test the connection
+        const result = await client.query('SELECT NOW() as current_time, current_database() as db_name');
+        console.log(`📊 Connected to database: ${result.rows[0].db_name}`);
+        console.log(`⏰ Server time: ${result.rows[0].current_time}`);
+
+        return true;
+      } catch (error) {
+        console.error(`❌ PostgreSQL connection attempt ${i + 1} failed:`, error.message);
+
+        if (i === retries - 1) {
+          console.error('🚨 All PostgreSQL connection attempts failed!');
+          console.error('🔄 Falling back to SQLite...');
+
+          // Fallback to SQLite
+          client = sqliteClient;
+          await initSQLiteDB();
+          console.log('✅ Fallback to SQLite successful');
+          return true;
+        }
+
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  };
+
+  // Attempt PostgreSQL connection
+  await connectWithRetry();
+}
 
 export default client;
